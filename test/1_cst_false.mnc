@@ -1,5 +1,4 @@
-int PARAM = 5;
-
 int f() {
+  false;
   return 0;
 }

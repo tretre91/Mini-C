@@ -11,6 +11,7 @@
     List.iter (fun (s, k) -> Hashtbl.add h s k)
       [ "return",   RETURN;
         "true",     BOOL_CST true;
+        "false",    BOOL_CST false;
         "int",      INT;
       ] ;
     fun s ->

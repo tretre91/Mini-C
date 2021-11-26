@@ -33,6 +33,7 @@ let typecheck_program (prog: prog) =
       | Return(e) -> let t = type_expr e in
                      if t <> fdef.return then
                        failwith "type error"
+      | Expr(_) -> ()
       (* À COMPLÉTER *)
                    
     and typecheck_seq s =

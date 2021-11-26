@@ -77,6 +77,7 @@ function_decl:
    À COMPLÉTER
 *)
 instruction:
+| e=expression SEMI { Expr(e) }
 | RETURN e=expression SEMI { Return(e) }
 ;
 

@@ -1,5 +1,7 @@
 int PARAM = 5;
 
 int f() {
+  true;
+  6;
   return 0;
 }
