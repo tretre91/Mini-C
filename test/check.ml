@@ -7,7 +7,7 @@ let check_file file =
     let ast = Minic_parser.program Minic_lexer.token lexbuf in
     close_in in_channel;
     Minic_typechecker.typecheck_program ast;
-    Printf.printf "Successfully checked program %s\n" file;
+    Printf.printf "Successfuly checked program %s\n" file;
     0
   with
   | Failure s -> Printf.printf "Test failed for program '%s': %s\n" file s; 1

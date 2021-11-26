@@ -77,8 +77,9 @@ function_decl:
    À COMPLÉTER
 *)
 instruction:
-| e=expression SEMI { Expr(e) }
-| RETURN e=expression SEMI { Return(e) }
+| id=IDENT SET e=expression SEMI  { Set(id, e) }
+| RETURN e=expression SEMI        { Return(e) }
+| e=expression SEMI               { Expr(e) }
 ;
 
 (* Expressions.
@@ -86,6 +87,6 @@ instruction:
    À COMPLÉTER
 *)
 expression:
-| n=CST { Cst(n) }
-| b=BOOL_CST { BCst(b) }
+| n=CST       { Cst(n) }
+| b=BOOL_CST  { BCst(b) }
 ;
