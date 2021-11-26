@@ -1,4 +1,7 @@
+open Libminic
+
 let () =
+  Printf.printf "%s\n" (Sys.getcwd ());
   let file = Sys.argv.(1) in
   let in_channel = open_in file in
   let lexbuf = Lexing.from_channel in_channel in
