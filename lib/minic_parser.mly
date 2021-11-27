@@ -33,7 +33,7 @@
 %token <string> IDENT
 %token LPAR RPAR BEGIN END
 %token RETURN SET SEMI COMMA
-%token INT VOID
+%token INT BOOL VOID
 %token ADD MUL
 %token EOF
 
@@ -81,13 +81,11 @@ variable_decl:
 | t=typ x=IDENT SEMI { (x, t, default_value t) }
 ;
 
-(* Indication de type.
-
-   À COMPLÉTER
-*)
+(* Indication de type. *)
 typ:
-| INT { Int }
-| VOID { Void }
+| INT   { Int }
+| BOOL  { Bool }
+| VOID  { Void }
 ;
 
 (* Déclaration de fonction.

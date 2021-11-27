@@ -13,6 +13,7 @@
         "true",     BOOL_CST true;
         "false",    BOOL_CST false;
         "int",      INT;
+        "bool",     BOOL;
         "void",     VOID;
       ] ;
     fun s ->
