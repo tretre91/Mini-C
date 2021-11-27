@@ -27,7 +27,8 @@ let typecheck_program (prog: prog) =
     let rec type_expr = function
       | Cst _ -> Int
       | BCst _ -> Bool
-      | Add(e1, e2) -> begin match type_expr e1, type_expr e2 with
+      | Add(e1, e2) | Mul(e1, e2) ->
+        begin match type_expr e1, type_expr e2 with
         | Int, Int -> Int
         | _, _ -> failwith "type error"
         end
