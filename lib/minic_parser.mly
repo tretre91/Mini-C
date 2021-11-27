@@ -101,4 +101,5 @@ expression:
 | e1=expression ADD e2=expression { Add(e1, e2) }
 | e1=expression MUL e2=expression { Mul(e1, e2) }
 | id=IDENT                        { Get(id) }
+| f=IDENT LPAR a=separated_list(COMMA, expression) RPAR { Call(f, a) }
 ;
