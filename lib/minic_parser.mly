@@ -3,6 +3,28 @@
   open Lexing
   open Minic_ast
 
+  (* Valeur par défaut d'une variable d'un type donné *)
+  let default_value = function
+   | Int -> Cst 0
+   | Bool -> BCst false
+   | Void -> failwith "Tried to declare a variable of type void" (* TODO *)
+
+  (* Crée une fonction servant à initialiser les varibles globales *)
+  let init globals =
+    let instructions = List.map (fun (n,t,e) -> Set(n, e)) globals in
+    { name="@init"; code=instructions; params=[]; return=Void; locals=[] }
+
+  (* Ajoute un appel à la fonction d'initialisation des variables globales
+     au début de la fonction main si elle existe *)
+  let rec update_main = function
+    | [] -> []
+    | f::tl ->
+      if f.name = "main" then
+        { f with code = Expr (Call("@init", [])) :: f.code } :: tl
+      else
+        f :: update_main tl
+    
+
 %}
 
 (* Déclaration des lexèmes *)
@@ -29,7 +51,8 @@
 program:
 | dl=declaration_list EOF
        { let var_list, fun_list = dl in
-         { globals = var_list; functions = fun_list; } }
+         let finit = init var_list in
+         { globals = var_list; functions = finit :: update_main fun_list; } }
 | error { let pos = $startpos in
           let message =
             Printf.sprintf
@@ -54,7 +77,8 @@ declaration_list:
    À COMPLÉTER
 *)
 variable_decl:
-| t=typ x=IDENT SET n=CST SEMI { (x, t, n) }
+| t=typ x=IDENT SET e=expression SEMI { (x, t, e) }
+| t=typ x=IDENT SEMI { (x, t, default_value t) }
 ;
 
 (* Indication de type.

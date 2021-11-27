@@ -4,9 +4,36 @@ module Env = Map.Make(String)
 
 (* Vérification du bon typage d'un programme. *)
 let typecheck_program (prog: prog) =
+  (* Vérifie la cohérence des types d'une liste de déclaration de variables
+     et ajoute ces variables à l'environnement env *)
+  let typecheck_declaration_list variables env type_exp =
+    let add_var env (x, ty, e) =
+      if type_exp env e = ty then
+        Env.add x ty env
+      else
+        failwith "type error"
+    in
+    List.fold_left add_var env variables
+  in
+
   (* L'environnement global mémorise le type de chaque variable globale. *)
   let global_env =
-    List.fold_left (fun env (x, ty, _) -> Env.add x ty env) Env.empty prog.globals
+    let rec type_global env = function
+      | Cst _ -> Int
+      | BCst _ -> Bool
+      | Add(e1, e2) | Mul(e1, e2) ->
+        begin match type_global env e1, type_global env e2 with
+        | Int, Int -> Int
+        | _, _ -> failwith "type error"
+        end
+      | Get x ->
+        begin match Env.find_opt x env with
+        | Some t -> t
+        | None -> failwith ("Undefined variable " ^ x)
+        end
+      | Call _ -> failwith "Cannot call a function in a global variable definition"
+    in
+    typecheck_declaration_list prog.globals Env.empty type_global
   in
 
   (* Vérification du bon typage d'une fonction.
@@ -24,7 +51,7 @@ let typecheck_program (prog: prog) =
       let param_env =
         List.fold_left (fun env (x, ty) -> Env.add x ty env) Env.empty fdef.params
       in
-      List.fold_left (fun env (x, ty) -> Env.add x ty env) param_env fdef.params
+      List.fold_left (fun env (x, ty) -> Env.add x ty env) param_env fdef.params (* TODO : appeler sur la liste de variables locales *)
     in
 
     (* Récuperation du type d'une variable *)

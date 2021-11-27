@@ -35,10 +35,10 @@ type fun_def = {
 }
 
 (* Représentation des programmes.
-   En réponse à l'indication de l'énoncé, j'associe une valeur entière
-   à chaque variable globale. Mais vous voudrez peut-être faire évoluer
-   cela (et procéder de même pour les variables locales des fonctions). *)
+   On associe une expression à chaque variable globale, cette expression
+   ne peut pas contenir d'appel de fonction ou de références à des variables
+   définies après la variable à laquelle elle est associée *)
 type prog = {
-  globals: (string * typ * int) list;
+  globals: (string * typ * expr) list;
   functions: fun_def list;
 }
