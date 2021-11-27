@@ -13,6 +13,7 @@
         "true",     BOOL_CST true;
         "false",    BOOL_CST false;
         "int",      INT;
+        "void",     VOID;
       ] ;
     fun s ->
       try  Hashtbl.find h s

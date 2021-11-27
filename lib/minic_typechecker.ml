@@ -78,17 +78,26 @@ let typecheck_program (prog: prog) =
         let t_var = type_var id in
         if t_var <> t_e then
           error "type error"
+        else
+          0
       (* Cas d'une instruction [return]. On vérifie que le type correspond au
          type de retour attendu par la fonction dans laquelle on se trouve. *)
       | Return(e) ->
         let t = type_expr e in
-        if t <> fdef.return then
-          error "type error"
-      | Expr(e) -> ignore (type_expr e)
+        begin match fdef.return, t with
+          | Void, _ -> error "cannot return a value from a void function"
+          | t1, t2 when t1 <> t2 -> error "type error"
+          | _, _ -> 1
+        end
+      | Expr(e) -> ignore (type_expr e); 0
       (* À COMPLÉTER *)
                    
     and typecheck_seq s =
-      List.iter typecheck_instr s        
+      let returns =
+        List.fold_left (fun ret instr -> ret + typecheck_instr instr) 0 s
+      in
+      if returns = 0 && fdef.return <> Void then
+        error "A non void function should return a value"
     in
 
     (* Code principal du typage d'une fonction : on type ses instructions. *)

@@ -11,7 +11,7 @@
 %token <string> IDENT
 %token LPAR RPAR BEGIN END
 %token RETURN SET SEMI COMMA
-%token INT
+%token INT VOID
 %token ADD MUL
 %token EOF
 
@@ -63,6 +63,7 @@ variable_decl:
 *)
 typ:
 | INT { Int }
+| VOID { Void }
 ;
 
 (* Déclaration de fonction.
