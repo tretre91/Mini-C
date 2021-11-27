@@ -21,6 +21,15 @@ let typecheck_program (prog: prog) =
       in
       List.fold_left (fun env (x, ty) -> Env.add x ty env) param_env fdef.params
     in
+
+    (* Récuperation du type d'une variable *)
+    let type_var x =
+      match Env.find_opt x local_env with
+      | Some t -> t
+      | None -> match Env.find_opt x global_env with
+        | Some t -> t
+        | None -> failwith (Printf.sprintf "In function %s, undefined variable %s" fdef.name x)
+    in
     
     (* Vérification du bon typage et calcul du type d'une expression.
        À nouveau, fonction locale avec accès à tout ce qui est au-dessus. *)
@@ -32,6 +41,7 @@ let typecheck_program (prog: prog) =
         | Int, Int -> Int
         | _, _ -> failwith "type error"
         end
+      | Get(id) -> type_var id
       (* À COMPLÉTER *)
     in
 
@@ -40,19 +50,15 @@ let typecheck_program (prog: prog) =
     let rec typecheck_instr = function
       | Set(id, e) ->
         let t_e = type_expr e in
-        let t_var = match Env.find_opt id local_env with
-          | Some t -> t
-          | None -> match Env.find_opt id global_env with
-            | Some t -> t
-            | None -> failwith (Printf.sprintf "In function %s, undefined variable %s" fdef.name id)
-        in
+        let t_var = type_var id in
         if t_var <> t_e then
           failwith "type error"
       (* Cas d'une instruction [return]. On vérifie que le type correspond au
          type de retour attendu par la fonction dans laquelle on se trouve. *)
-      | Return(e) -> let t = type_expr e in
-                     if t <> fdef.return then
-                       failwith "type error"
+      | Return(e) ->
+        let t = type_expr e in
+        if t <> fdef.return then
+          failwith "type error"
       | Expr(e) -> ignore (type_expr e)
       (* À COMPLÉTER *)
                    
