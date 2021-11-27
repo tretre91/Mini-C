@@ -5,7 +5,7 @@ module Env = Map.Make(String)
 (* Vérification du bon typage d'un programme. *)
 let typecheck_program (prog: prog) =
   (* Vérifie la cohérence des types d'une liste de déclaration de variables
-     et ajoute ces variables à l'environnement env *)
+     et ajoute ces variables à l'environnement env. *)
   let typecheck_declaration_list variables env type_exp =
     let add_var env (x, ty, e) =
       if type_exp env e = ty then
@@ -40,62 +40,73 @@ let typecheck_program (prog: prog) =
      C'est une fonction locale : on a accès à [prog] et à [global_env]. *)
   let typecheck_function (fdef: fun_def) =
     (* Lève une exception qui contient un message d'erreur indiquant le nom
-       de la fonction où l'erreur a eu lieu *)
+       de la fonction où l'erreur a eu lieu. *)
     let error message =
       failwith (Printf.sprintf "Type error in function %s: %s" fdef.name message)
     in
+
+    (* Récuperation du type d'une variable dans un environnement donné. *)
+    let type_var env x =
+      match Env.find_opt x env with
+      | Some t -> t
+      | None -> error (Printf.sprintf "undefined variable %s" x)
+    in
     
-    (* L'environnement local mémorise le type des paramètres et de chaque
-       variable locale. *)
-    let local_env =
-      let param_env =
-        List.fold_left (fun env (x, ty) -> Env.add x ty env) Env.empty fdef.params
+    (* Vérification du bon typage et calcul du type d'une expression dans un
+       environnement donné. *)
+    let type_expr env e =
+      let rec type_expr = function
+        | Cst _ -> Int
+        | BCst _ -> Bool
+        | Add(e1, e2) | Mul(e1, e2) ->
+          begin match type_expr e1, type_expr e2 with
+          | Int, Int -> Int
+          | _, _ -> error "type error"
+          end
+        | Get(id) -> type_var env id
+        | Call(f, args) -> type_call f args
+        (* À COMPLÉTER *)
+      and type_call f args =
+        let func =
+          match List.find_opt (fun func -> func.name = f) prog.functions with
+          | Some f -> f
+          | None -> error (Printf.sprintf "call to undefined function %s" f)
+        in
+        let rec typecheck_args params args =
+          match params, args with
+          | [], [] -> ()
+          | [], _ -> error (Printf.sprintf "too many arguments in call to %s" func.name)
+          | _, [] -> error (Printf.sprintf "missing arguments in call to %s" func.name)
+          | (_, t)::params', e::args' ->
+            if type_expr e <> t then
+              error "type error"
+            else
+              typecheck_args params' args'
+        in
+        typecheck_args func.params args;
+        func.return
       in
-      List.fold_left (fun env (x, ty) -> Env.add x ty env) param_env fdef.params (* TODO : appeler sur la liste de variables locales *)
+      type_expr e
     in
 
-    (* Récuperation du type d'une variable *)
-    let type_var x =
-      match Env.find_opt x local_env with
-      | Some t -> t
-      | None -> match Env.find_opt x global_env with
-        | Some t -> t
-        | None -> error (Printf.sprintf "undefined variable %s" x)
-    in
-    
-    (* Vérification du bon typage et calcul du type d'une expression.
-       À nouveau, fonction locale avec accès à tout ce qui est au-dessus. *)
-    let rec type_expr = function
-      | Cst _ -> Int
-      | BCst _ -> Bool
-      | Add(e1, e2) | Mul(e1, e2) ->
-        begin match type_expr e1, type_expr e2 with
-        | Int, Int -> Int
-        | _, _ -> error "type error"
-        end
-      | Get(id) -> type_var id
-      | Call(f, args) -> type_call f args
-      (* À COMPLÉTER *)
-    and type_call f args =
-      let func =
-        match List.find_opt (fun func -> func.name = f) prog.functions with
-        | Some f -> f
-        | None -> error (Printf.sprintf "call to undefined function %s" f)
+    (* L'environnement local contient les types de toutes les variables de la
+       fonction (globales, paramètres et locales).
+       Si plusieurs variables ont le même nom alors l'ordre de priorité est
+          locale > paramètre > globale *)
+    let local_env =
+      let param_env =
+        List.fold_left (fun env (x, ty) -> Env.add x ty env) global_env fdef.params
       in
-      let rec typecheck_args params args =
-        match params, args with
-        | [], [] -> ()
-        | [], _ -> error (Printf.sprintf "too many arguments in call to %s" func.name)
-        | _, [] -> error (Printf.sprintf "missing arguments in call to %s" func.name)
-        | (_, t)::params', e::args' ->
-          if type_expr e <> t then
-            error "type error"
-          else
-            typecheck_args params' args'
-      in
-      typecheck_args func.params args;
-      func.return
+      typecheck_declaration_list fdef.locals param_env type_expr
     in
+
+    (* A partir d'ici l'environnement n'est plus modifié, on redéfinit donc
+       les fonctions auxiliaires qui prennent en argument un environnement *)
+
+    (* Récuperation du type d'une variable dans l'environnement local. *)
+    let type_expr = type_expr local_env in
+    (* Calcul du type d'une expression dans l'environnement local. *)
+    let type_var = type_var local_env in
 
     (* Vérification du bon typage d'une instruction ou d'une séquence.
        Toujours local. *)

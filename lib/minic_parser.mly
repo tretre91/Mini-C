@@ -9,22 +9,6 @@
    | Bool -> BCst false
    | Void -> failwith "Tried to declare a variable of type void" (* TODO *)
 
-  (* Crée une fonction servant à initialiser les varibles globales *)
-  let init globals =
-    let instructions = List.map (fun (n,t,e) -> Set(n, e)) globals in
-    { name="@init"; code=instructions; params=[]; return=Void; locals=[] }
-
-  (* Ajoute un appel à la fonction d'initialisation des variables globales
-     au début de la fonction main si elle existe *)
-  let rec update_main = function
-    | [] -> []
-    | f::tl ->
-      if f.name = "main" then
-        { f with code = Expr (Call("@init", [])) :: f.code } :: tl
-      else
-        f :: update_main tl
-    
-
 %}
 
 (* Déclaration des lexèmes *)
@@ -51,8 +35,7 @@
 program:
 | dl=declaration_list EOF
        { let var_list, fun_list = dl in
-         let finit = init var_list in
-         { globals = var_list; functions = finit :: update_main fun_list; } }
+         { globals = var_list; functions = fun_list; } }
 | error { let pos = $startpos in
           let message =
             Printf.sprintf
@@ -94,8 +77,8 @@ typ:
    À COMPLÉTER
 *)
 function_decl:
-| t=typ f=IDENT LPAR p=separated_list(COMMA, parameter) RPAR BEGIN s=list(instruction) END
-    { { name=f; code=s; params=p; return=t; locals=[] } }
+| t=typ f=IDENT LPAR p=separated_list(COMMA, parameter) RPAR BEGIN l=list(variable_decl) s=list(instruction) END
+    { { name=f; code=s; params=p; return=t; locals=l } }
 ;
 
 (* Paramètre formel d'une fonction *)
