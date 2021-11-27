@@ -12,7 +12,10 @@
 %token LPAR RPAR BEGIN END
 %token RETURN SET SEMI
 %token INT
+%token ADD
 %token EOF
+
+%left ADD
 
 %start program
 %type <Minic_ast.prog> program
@@ -87,6 +90,7 @@ instruction:
    À COMPLÉTER
 *)
 expression:
-| n=CST       { Cst(n) }
-| b=BOOL_CST  { BCst(b) }
+| n=CST                           { Cst(n) }
+| b=BOOL_CST                      { BCst(b) }
+| e1=expression ADD e2=expression { Add(e1, e2) }
 ;

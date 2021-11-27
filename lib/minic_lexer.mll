@@ -50,6 +50,8 @@ rule token = parse
       { BEGIN }
   | "}"
       { END }
+  | "+"
+      { ADD }
   | _
       { failwith ("Unknown character : " ^ (lexeme lexbuf)) }
   | eof

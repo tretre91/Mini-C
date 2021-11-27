@@ -27,6 +27,10 @@ let typecheck_program (prog: prog) =
     let rec type_expr = function
       | Cst _ -> Int
       | BCst _ -> Bool
+      | Add(e1, e2) -> begin match type_expr e1, type_expr e2 with
+        | Int, Int -> Int
+        | _, _ -> failwith "type error"
+        end
       (* À COMPLÉTER *)
     in
 
@@ -48,7 +52,7 @@ let typecheck_program (prog: prog) =
       | Return(e) -> let t = type_expr e in
                      if t <> fdef.return then
                        failwith "type error"
-      | Expr(_) -> ()
+      | Expr(e) -> ignore (type_expr e)
       (* À COMPLÉTER *)
                    
     and typecheck_seq s =
