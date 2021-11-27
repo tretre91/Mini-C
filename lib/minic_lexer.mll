@@ -40,6 +40,8 @@ rule token = parse
       { keyword_or_ident id }
   | ";"
       { SEMI }
+  | ","
+      { COMMA }
   | "="
       { SET }
   | "("

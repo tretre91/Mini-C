@@ -10,7 +10,7 @@
 %token <bool> BOOL_CST
 %token <string> IDENT
 %token LPAR RPAR BEGIN END
-%token RETURN SET SEMI
+%token RETURN SET SEMI COMMA
 %token INT
 %token ADD MUL
 %token EOF
@@ -66,14 +66,18 @@ typ:
 ;
 
 (* Déclaration de fonction.
-   Note : on ne traite ici que le cas d'une fonction sans argument et
-   sans variable locale.
+   Note : on ne traite ici que le cas d'une fonction sans variable locale.
 
    À COMPLÉTER
 *)
 function_decl:
-| t=typ f=IDENT LPAR RPAR BEGIN s=list(instruction) END
-    { { name=f; code=s; params=[]; return=t; locals=[] } }
+| t=typ f=IDENT LPAR p=separated_list(COMMA, parameter) RPAR BEGIN s=list(instruction) END
+    { { name=f; code=s; params=p; return=t; locals=[] } }
+;
+
+(* Paramètre formel d'une fonction *)
+parameter:
+| t=typ id=IDENT { id, t }
 ;
 
 (* Instructions.
