@@ -18,9 +18,10 @@
 %token LPAR RPAR BEGIN END
 %token RETURN SET SEMI COMMA
 %token INT BOOL VOID
-%token ADD MUL
+%token ADD MUL LT
 %token EOF
 
+%nonassoc LT
 %left ADD
 %left MUL
 
@@ -54,11 +55,7 @@ declaration_list:
                                          vl, fd :: fl }
 ;
 
-(* Déclaration de variable.
-   Note : on ne traite ici que le cas où une valeur initiale est fournie.
-
-   À COMPLÉTER
-*)
+(* Déclaration de variable. *)
 variable_decl:
 | t=typ x=IDENT SET e=expression SEMI { (x, t, e) }
 | t=typ x=IDENT SEMI { (x, t, default_value t) }
@@ -71,11 +68,7 @@ typ:
 | VOID  { Void }
 ;
 
-(* Déclaration de fonction.
-   Note : on ne traite ici que le cas d'une fonction sans variable locale.
-
-   À COMPLÉTER
-*)
+(* Déclaration de fonction. *)
 function_decl:
 | t=typ f=IDENT LPAR p=separated_list(COMMA, parameter) RPAR BEGIN l=list(variable_decl) s=list(instruction) END
     { { name=f; code=s; params=p; return=t; locals=l } }
@@ -96,16 +89,14 @@ instruction:
 | e=expression SEMI               { Expr(e) }
 ;
 
-(* Expressions.
-
-   À COMPLÉTER
-*)
+(* Expressions. *)
 expression:
 | LPAR e=expression RPAR          { e }
 | n=CST                           { Cst(n) }
 | b=BOOL_CST                      { BCst(b) }
 | e1=expression ADD e2=expression { Add(e1, e2) }
 | e1=expression MUL e2=expression { Mul(e1, e2) }
+| e1=expression LT e2=expression  { Lt(e1, e2) }
 | id=IDENT                        { Get(id) }
 | f=IDENT LPAR a=separated_list(COMMA, expression) RPAR { Call(f, a) }
 ;

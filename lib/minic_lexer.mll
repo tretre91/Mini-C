@@ -58,6 +58,8 @@ rule token = parse
       { ADD }
   | "*"
       { MUL }
+  | "<"
+      { LT }
   | _
       { failwith ("Unknown character : " ^ (lexeme lexbuf)) }
   | eof

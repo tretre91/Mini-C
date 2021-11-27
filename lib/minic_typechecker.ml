@@ -26,6 +26,11 @@ let typecheck_program (prog: prog) =
         | Int, Int -> Int
         | _, _ -> failwith "type error"
         end
+      | Lt(e1, e2) ->
+        begin match type_global env e1, type_global env e2 with
+        | Int, Int -> Bool
+        | _, _ -> failwith "type error"
+        end
       | Get x ->
         begin match Env.find_opt x env with
         | Some t -> t
@@ -61,6 +66,11 @@ let typecheck_program (prog: prog) =
         | Add(e1, e2) | Mul(e1, e2) ->
           begin match type_expr e1, type_expr e2 with
           | Int, Int -> Int
+          | _, _ -> error "type error"
+          end
+        | Lt(e1, e2) ->
+          begin match type_expr e1, type_expr e2 with
+          | Int, Int -> Bool
           | _, _ -> error "type error"
           end
         | Get(id) -> type_var env id
