@@ -15,6 +15,8 @@
         "int",      INT;
         "bool",     BOOL;
         "void",     VOID;
+        "if",       IF;
+        "else",     ELSE;
       ] ;
     fun s ->
       try  Hashtbl.find h s

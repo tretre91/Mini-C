@@ -126,30 +126,44 @@ let typecheck_program (prog: prog) =
         let t_var = type_var id in
         if t_var <> t_e then
           error "type error"
-        else
-          0
+      | If(cond, t, f) ->
+          if type_expr cond <> Bool then
+            error "Expecting a boolean expression in a conditional"
+          else begin
+            typecheck_seq t;
+            typecheck_seq f
+          end
       (* Cas d'une instruction [return]. On vérifie que le type correspond au
          type de retour attendu par la fonction dans laquelle on se trouve. *)
       | Return(e) ->
         let t = type_expr e in
         begin match fdef.return, t with
-          | Void, _ -> error "cannot return a value from a void function"
-          | t1, t2 when t1 <> t2 -> error "type error"
-          | _, _ -> 1
+        | Void, _ -> error "cannot return a value from a void function"
+        | t1, t2 when t1 <> t2 -> error "Mismatch between the returned value and the function's type"
+        | _, _ -> ()
         end
-      | Expr(e) -> ignore (type_expr e); 0
+      | Expr(e) -> ignore (type_expr e)
       (* À COMPLÉTER *)
-                   
     and typecheck_seq s =
-      let returns =
-        List.fold_left (fun ret instr -> ret + typecheck_instr instr) 0 s
-      in
-      if returns = 0 && fdef.return <> Void then
-        error "A non void function should return a value"
+        List.iter typecheck_instr s
+    in
+
+    (* Indique si la fonction contient au moins une instruction return *)
+    let rec returns = function
+      | [] -> false
+      | e :: tl -> match e with
+        | Return _ -> true
+        | If(_, t, f) ->
+          returns t || returns f || returns tl
+        | _ -> returns tl
     in
 
     (* Code principal du typage d'une fonction : on type ses instructions. *)
     typecheck_seq (fdef.code);
+    
+    (* On vérifie que la fonction renvoie bien une valeur *)
+    if fdef.return <> Void && not (returns fdef.code) then
+      error "A non void function should return a value"
   in
 
   (* Code principal du typage d'un programme : on type ses fonctions.
