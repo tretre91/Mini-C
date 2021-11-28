@@ -18,6 +18,7 @@
         "if",       IF;
         "else",     ELSE;
         "while",    WHILE;
+        "putchar",  PUTCHAR;
       ] ;
     fun s ->
       try  Hashtbl.find h s

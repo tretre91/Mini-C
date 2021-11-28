@@ -75,7 +75,6 @@ let typecheck_program (prog: prog) =
           end
         | Get(id) -> type_var env id
         | Call(f, args) -> type_call f args
-        (* À COMPLÉTER *)
       and type_call f args =
         let func =
           match List.find_opt (fun func -> func.name = f) prog.functions with
@@ -113,14 +112,17 @@ let typecheck_program (prog: prog) =
     (* A partir d'ici l'environnement n'est plus modifié, on redéfinit donc
        les fonctions auxiliaires qui prennent en argument un environnement *)
 
-    (* Récuperation du type d'une variable dans l'environnement local. *)
-    let type_expr = type_expr local_env in
     (* Calcul du type d'une expression dans l'environnement local. *)
+    let type_expr = type_expr local_env in
+    (* Récuperation du type d'une variable dans l'environnement local. *)
     let type_var = type_var local_env in
 
     (* Vérification du bon typage d'une instruction ou d'une séquence.
        Toujours local. *)
     let rec typecheck_instr = function
+      | Putchar(e) ->
+          if type_expr e <> Int then
+            error "putchar expects an integer (ascii code) argument"
       | Set(id, e) ->
         let t_e = type_expr e in
         let t_var = type_var id in
@@ -138,8 +140,6 @@ let typecheck_program (prog: prog) =
           error "expecting a boolean expression in while loop's condition"
         else
           typecheck_seq s
-      (* Cas d'une instruction [return]. On vérifie que le type correspond au
-         type de retour attendu par la fonction dans laquelle on se trouve. *)
       | Return(e) ->
         let t = type_expr e in
         begin match fdef.return, t with
@@ -148,7 +148,6 @@ let typecheck_program (prog: prog) =
         | _, _ -> ()
         end
       | Expr(e) -> ignore (type_expr e)
-      (* À COMPLÉTER *)
     and typecheck_seq s =
         List.iter typecheck_instr s
     in
