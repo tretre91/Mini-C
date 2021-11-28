@@ -17,6 +17,7 @@
         "void",     VOID;
         "if",       IF;
         "else",     ELSE;
+        "while",    WHILE;
       ] ;
     fun s ->
       try  Hashtbl.find h s

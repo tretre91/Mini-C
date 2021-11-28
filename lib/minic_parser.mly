@@ -17,7 +17,7 @@
 %token <string> IDENT
 %token LPAR RPAR BEGIN END
 %token RETURN SET SEMI COMMA
-%token IF ELSE
+%token IF ELSE WHILE
 %token INT BOOL VOID
 %token ADD MUL LT
 %token EOF
@@ -88,6 +88,8 @@ instruction:
 | id=IDENT SET e=expression SEMI  { Set(id, e) }
 | IF LPAR c=expression RPAR BEGIN t=list(instruction) END ELSE BEGIN f=list(instruction) END
                                   { If(c, t, f) }
+| WHILE LPAR c=expression RPAR BEGIN s=list(instruction) END
+                                  { While(c, s) }
 | RETURN e=expression SEMI        { Return(e) }
 | e=expression SEMI               { Expr(e) }
 ;

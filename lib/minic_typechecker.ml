@@ -128,18 +128,23 @@ let typecheck_program (prog: prog) =
           error "type error"
       | If(cond, t, f) ->
           if type_expr cond <> Bool then
-            error "Expecting a boolean expression in a conditional"
+            error "expecting a boolean expression in an if's condition"
           else begin
             typecheck_seq t;
             typecheck_seq f
           end
+      | While(cond, s) ->
+        if type_expr cond <> Bool then
+          error "expecting a boolean expression in while loop's condition"
+        else
+          typecheck_seq s
       (* Cas d'une instruction [return]. On vérifie que le type correspond au
          type de retour attendu par la fonction dans laquelle on se trouve. *)
       | Return(e) ->
         let t = type_expr e in
         begin match fdef.return, t with
         | Void, _ -> error "cannot return a value from a void function"
-        | t1, t2 when t1 <> t2 -> error "Mismatch between the returned value and the function's type"
+        | t1, t2 when t1 <> t2 -> error "mismatch between the returned value and the function's type"
         | _, _ -> ()
         end
       | Expr(e) -> ignore (type_expr e)
@@ -153,8 +158,8 @@ let typecheck_program (prog: prog) =
       | [] -> false
       | e :: tl -> match e with
         | Return _ -> true
-        | If(_, t, f) ->
-          returns t || returns f || returns tl
+        | If(_, t, f) -> returns t || returns f || returns tl
+        | While(_, s) -> returns s || returns tl
         | _ -> returns tl
     in
 
