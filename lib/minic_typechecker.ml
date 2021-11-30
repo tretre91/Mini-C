@@ -8,10 +8,14 @@ let typecheck_program (prog: prog) =
      et ajoute ces variables à l'environnement env. *)
   let typecheck_declaration_list variables env type_exp =
     let add_var env (x, ty, e) =
-      if type_exp env e = ty then
-        Env.add x ty env
-      else
-        failwith "type error"
+      let te = type_exp env e in
+      match ty, te with
+      | Void, _ -> failwith "cannot declare a variable of type void"
+      | _, _ ->
+        if ty = te then
+          Env.add x ty env
+        else
+          failwith "type error"
     in
     List.fold_left add_var env variables
   in
@@ -104,7 +108,12 @@ let typecheck_program (prog: prog) =
           locale > paramètre > globale *)
     let local_env =
       let param_env =
-        List.fold_left (fun env (x, ty) -> Env.add x ty env) global_env fdef.params
+        List.fold_left (fun env (x, ty) -> 
+          if ty = Void then
+            error (Printf.sprintf "'void %s', cannot use a parameter of type void" x)
+          else
+            Env.add x ty env
+        ) global_env fdef.params
       in
       typecheck_declaration_list fdef.locals param_env type_expr
     in
