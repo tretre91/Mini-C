@@ -2,4 +2,4 @@
   (name check)
   (libraries libminic)
   (deps
-	(source_tree %{workspace_root})))
+	  (source_tree %{workspace_root})))

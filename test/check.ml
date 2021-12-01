@@ -6,6 +6,7 @@ let check_file file =
   try
     let ast = Minic_parser.program Minic_lexer.token lexbuf in
     close_in in_channel;
+    Minic_typechecker.strict_check ast;
     Minic_typechecker.typecheck_program ast;
     Printf.printf "Successfuly checked program %s\n" file;
     0

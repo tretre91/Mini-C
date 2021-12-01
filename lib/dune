@@ -6,7 +6,8 @@
 (library
   (name libminic)
   (modules
-	minic_lexer
-	minic_parser
-	minic_ast
-	minic_typechecker))
+    minic_lexer
+    minic_parser
+    minic_ast
+    minic_typechecker
+    minic_interpreter))
