@@ -21,11 +21,11 @@
 %token INT BOOL VOID
 %token ADD SUB MUL DIV
 %token EQ NEQ
-%token LT
+%token LT LEQ
 %token EOF
 
 %left EQ NEQ
-%nonassoc LT
+%nonassoc LT LEQ
 %left SUB ADD
 %left DIV MUL
 
@@ -106,7 +106,8 @@ expression:
 | e1=expression DIV e2=expression { ArithmeticOp((/), e1, e2) }
 | e1=expression EQ e2=expression  { Eq(e1, e2) }
 | e1=expression NEQ e2=expression { Neq(e1, e2) }
-| e1=expression LT e2=expression  { Lt(e1, e2) }
+| e1=expression LT e2=expression  { ComparisonOp((<), e1, e2) }
+| e1=expression LEQ e2=expression { ComparisonOp((<=), e1, e2) }
 | id=IDENT                        { Get(id) }
 | f=IDENT LPAR a=separated_list(COMMA, expression) RPAR { Call(f, a) }
 ;

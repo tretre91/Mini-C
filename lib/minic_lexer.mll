@@ -72,6 +72,8 @@ rule token = parse
       { NEQ }
   | "<"
       { LT }
+  | "<="
+      { LEQ }
   | _
       { failwith ("Unknown character : " ^ (lexeme lexbuf)) }
   | eof

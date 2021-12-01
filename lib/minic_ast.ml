@@ -11,7 +11,7 @@ type expr =
   | ArithmeticOp of (int -> int -> int) * expr * expr
   | Eq of expr * expr
   | Neq of expr * expr
-  | Lt of expr * expr
+  | ComparisonOp of (int -> int -> bool) * expr * expr
   | Get of string
   | Call of string * expr list
 

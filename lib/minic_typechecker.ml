@@ -87,7 +87,7 @@ let typecheck_program (prog: prog) =
           Bool
         else
           raise (Equality_operator_mismatch (t1, t2))
-      | Lt(e1, e2) ->
+      | ComparisonOp(_, e1, e2) ->
         begin match type_expr e1, type_expr e2 with
         | Int, Int -> Bool
         | t1, t2 ->  raise (Binary_operator_mismatch ("comparison", (Int, Int), (t1, t2)))
@@ -259,7 +259,7 @@ let strict_check (prog: prog) =
   let check_global_expression vars =
     let rec check_expr = function
     | Cst _ | BCst _ | Get _ -> ()
-    | ArithmeticOp(_, e1, e2) | Lt(e1, e2) ->
+    | ArithmeticOp(_, e1, e2) | ComparisonOp(_, e1, e2) | Eq(e1, e2) | Neq(e1, e2) ->
       check_expr e1;
       check_expr e2
     | Call _ -> failwith "Cannot initialize a global variable with a function's result"
