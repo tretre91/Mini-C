@@ -9,7 +9,9 @@ type expr =
   | Cst of int
   | BCst of bool
   | ArithmeticOp of (int -> int -> int) * expr * expr
-  | Lt  of expr * expr
+  | Eq of expr * expr
+  | Neq of expr * expr
+  | Lt of expr * expr
   | Get of string
   | Call of string * expr list
 

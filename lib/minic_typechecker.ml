@@ -12,6 +12,7 @@ exception Void_variable of string
 exception Undefined_function of string
 (* nom de l'opérateur, types attendus des opérandes gauche et droits, type des expressions *)
 exception Binary_operator_mismatch of string * (typ * typ) * (typ * typ)
+exception Equality_operator_mismatch of typ * typ
 (* nom de la fonction, nom du paramètre, type du paramètre, type de l'expression *)
 exception Bad_function_arg of string * string * typ * typ
 (* type de la fonction, type de l'expression renvoyée *)
@@ -53,6 +54,9 @@ let typecheck_program (prog: prog) =
         let se1, se2 = string_of_typ (fst expected), string_of_typ (snd expected) in
         let sg1, sg2 = string_of_typ (fst got), string_of_typ (snd got) in
         Printf.sprintf "%s operator expects %s (lhs) and %s (rhs) expressions, got %s and %s" op_type se1 se2 sg1 sg2
+      | Equality_operator_mismatch (t1, t2) ->
+        let s1, s2 = string_of_typ t1, string_of_typ t2 in
+        Printf.sprintf "equality operator expects both arguments to be of the same type, got %s and %s" s1 s2
       | Bad_function_arg (f, param, tp, te) ->
         let stp = string_of_typ tp in
         let ste = string_of_typ te in
@@ -76,6 +80,13 @@ let typecheck_program (prog: prog) =
         | Int, Int -> Int
         | t1, t2 -> raise (Binary_operator_mismatch ("arithmetic", (Int, Int), (t1, t2)))
         end
+      | Eq(e1, e2) | Neq(e1, e2) ->
+        let t1 = type_expr e1 in
+        let t2 = type_expr e2 in
+        if t1 = t2 then
+          Bool
+        else
+          raise (Equality_operator_mismatch (t1, t2))
       | Lt(e1, e2) ->
         begin match type_expr e1, type_expr e2 with
         | Int, Int -> Bool
