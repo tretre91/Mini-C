@@ -74,6 +74,10 @@ rule token = parse
       { LT }
   | "<="
       { LEQ }
+  | ">"
+      { GT }
+  | ">="
+      { GEQ }
   | _
       { failwith ("Unknown character : " ^ (lexeme lexbuf)) }
   | eof

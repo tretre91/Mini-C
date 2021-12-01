@@ -45,19 +45,23 @@ Les instructions supportées sont :
 
 Une expression peut être sous une des formes suivantes :
 
-| expression                    | exemple         |
-| ----------------------------- | --------------- |
-| **Littéraux**                 |                 |
-| constante entière             | `-5`            |
-| constante booléenne           | `true`, `false` |
-| **Opérations arithmétiques**  |                 |
-| addition                      | `1 + -5`        |
-| multiplication                | `(1 + 1) * 2`   |
-| **Opérations de comparaison** |                 |
-| infériorité stricte           | `1 < 2`         |
-| **Autres**                    |                 |
-| variable                      | `x`             |
-| appel de fonction             | `foo(5, false)` |
+| expression                    | exemple                   |
+| ----------------------------- | ------------------------- |
+| **Littéraux**                 |                           |
+| constante entière             | `-5`                      |
+| constante booléenne           | `true`, `false`           |
+| **Opérations arithmétiques**  |                           |
+| addition                      | `1 + -5`                  |
+| soustraction                  | `1 - 5`                   |
+| multiplication                | `(1 + 1) * 2`             |
+| division                      | `10 / 2`                  |
+| **Opérations de comparaison** |                           |
+| égalité                       | `1 == 1`, `true != false` |
+| inégalité stricte             | `1 < 2`, `2 > 1`          |
+| inégalité large               | `1 <= 1`, `3 <= 4`        |
+| **Autres**                    |                           |
+| variable                      | `x`                       |
+| appel de fonction             | `foo(5, false)`           |
 
 ## Fonctionnalités supplémentaires
 
