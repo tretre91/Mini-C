@@ -7,7 +7,7 @@
   let default_value = function
    | Int -> Cst 0
    | Bool -> BCst false
-   | Void -> failwith "Tried to declare a variable of type void" (* TODO *)
+   | Void -> Cst 0      (* peu importe, sera détécté par le vérificateur de type *)
 
 %}
 

@@ -2,10 +2,71 @@ open Minic_ast
 (* Pour représenter les environnements associant chaque variable à son type. *)
 module Env = Map.Make(String)
 
+
+(* type de la variable, nom de la variable, type de l'expression *)
+exception Bad_assignement of typ * string * typ
+(* nom de l'instruction, type de l'expression *)
+exception Bad_condition of string * typ
+exception Undefined_variable of string
+exception Void_variable of string
+exception Undefined_function of string
+(* nom de l'opérateur, types attendus des opérandes gauche et droits, type des expressions *)
+exception Binary_operator_mismatch of string * (typ * typ) * (typ * typ)
+(* nom de la fonction, nom du paramètre, type du paramètre, type de l'expression *)
+exception Bad_function_arg of string * string * typ * typ
+(* type de la fonction, type de l'expression renvoyée *)
+exception Return_value_mismatch of typ * typ
+
+type scope =
+  | Global
+  | Local of string
+
 (* Vérification du bon typage d'un programme. *)
 let typecheck_program (prog: prog) =
+  let string_of_typ = function
+    | Int -> "int"
+    | Bool -> "bool"
+    | Void -> "void"
+  in
+
+  (* Lève une exception qui contient un message d'erreur indiquant le nom
+     de la fonction où l'erreur a eu lieu. *)
+  let error scope exn =
+    let prefix =
+      match scope with
+      | Global -> "global scope"
+      | Local f -> "function " ^ f
+    in
+    let error =
+      match exn with
+      | Bad_assignement (tv, var, te) ->
+        Printf.sprintf "cannot assign a value of type %s to variable '%s' of type %s" (string_of_typ te) var (string_of_typ tv)
+      | Bad_condition (context, te) ->
+        Printf.sprintf "expecting a bool expression in %s's condition, got %s" context (string_of_typ te)
+      | Undefined_variable var ->
+        "undefined variable %s" ^ var
+      | Void_variable var ->
+        Printf.sprintf "'void %s': cannot define a variable of type void" var
+      | Undefined_function f ->
+        "call to undefined function " ^ f
+      | Binary_operator_mismatch (op_type, expected, got) ->
+        let se1, se2 = string_of_typ (fst expected), string_of_typ (snd expected) in
+        let sg1, sg2 = string_of_typ (fst got), string_of_typ (snd got) in
+        Printf.sprintf "%s operator expects %s (lhs) and %s (rhs) expressions, got %s and %s" op_type se1 se2 sg1 sg2
+      | Bad_function_arg (f, param, tp, te) ->
+        let stp = string_of_typ tp in
+        let ste = string_of_typ te in
+        Printf.sprintf "in call to %s, parameter '%s' expects an argument of type %s, got %s" f param stp ste
+      | Return_value_mismatch (expected, got) ->
+        Printf.sprintf "cannot return a value of type %s from a %s function" (string_of_typ expected) (string_of_typ got)
+      | Failure m -> m
+      | e -> raise e
+    in
+    failwith (Printf.sprintf "Type error in %s: %s" prefix error)
+  in
+
   (* Vérification du bon typage et calcul du type d'une expression dans un
-    environnement donné. *)
+     environnement donné. *)
   let type_expr env e =
     let rec type_expr = function
       | Cst _ -> Int
@@ -13,33 +74,34 @@ let typecheck_program (prog: prog) =
       | Add(e1, e2) | Mul(e1, e2) ->
         begin match type_expr e1, type_expr e2 with
         | Int, Int -> Int
-        | _, _ -> failwith "type error"
+        | t1, t2 -> raise (Binary_operator_mismatch ("arithmetic", (Int, Int), (t1, t2)))
         end
       | Lt(e1, e2) ->
         begin match type_expr e1, type_expr e2 with
         | Int, Int -> Bool
-        | _, _ -> failwith "type error"
+        | t1, t2 ->  raise (Binary_operator_mismatch ("comparison", (Int, Int), (t1, t2)))
         end
       | Get(x) ->
         begin match Env.find_opt x env with
         | Some t -> t
-        | None -> failwith ("undefined variable " ^ x)
+        | None -> raise (Undefined_variable x)
         end
       | Call(f, args) -> type_call f args
     and type_call f args =
       let func =
         match List.find_opt (fun func -> func.name = f) prog.functions with
         | Some f -> f
-        | None -> failwith ("call to undefined function " ^ f)
+        | None -> raise (Undefined_function f)
       in
       let rec typecheck_args params args =
         match params, args with
         | [], [] -> ()
         | [], _ -> failwith ("too many arguments in call to " ^ func.name)
         | _, [] -> failwith ("missing arguments in call to " ^ func.name)
-        | (_, t)::params', e::args' ->
-          if type_expr e <> t then
-            failwith "type error"
+        | (p, tp)::params', e::args' ->
+          let te = type_expr e in
+          if te <> tp then
+            raise (Bad_function_arg (func.name, p, tp, te))
           else
             typecheck_args params' args'
       in
@@ -55,30 +117,26 @@ let typecheck_program (prog: prog) =
     let add_var env (x, ty, e) =
       let te = type_expr env e in
       match ty, te with
-      | Void, _ -> failwith "cannot declare a variable of type void"
+      | Void, _ -> raise (Void_variable x)
       | _, _ ->
         if ty = te then
           Env.add x ty env
         else
-          failwith "type error"
+          raise (Bad_assignement (ty, x, te))
     in
     List.fold_left add_var env variables
   in
 
   (* L'environnement global mémorise le type de chaque variable globale. *)
   let global_env =
-    typecheck_declaration_list prog.globals Env.empty
+    try
+      typecheck_declaration_list prog.globals Env.empty
+    with
+    | e -> error Global e
   in
 
-  (* Vérification du bon typage d'une fonction.
-     C'est une fonction locale : on a accès à [prog] et à [global_env]. *)
+  (* Vérification du bon typage d'une fonction. *)
   let typecheck_function (fdef: fun_def) =
-    (* Lève une exception qui contient un message d'erreur indiquant le nom
-       de la fonction où l'erreur a eu lieu. *)
-    let error message =
-      failwith (Printf.sprintf "Type error in function %s: %s" fdef.name message)
-    in
-
     (* L'environnement local contient les types de toutes les variables de la
        fonction (globales, paramètres et locales).
        Si plusieurs variables ont le même nom alors l'ordre de priorité est
@@ -87,7 +145,7 @@ let typecheck_program (prog: prog) =
       let param_env =
         List.fold_left (fun env (x, ty) -> 
           if ty = Void then
-            error (Printf.sprintf "'void %s', cannot use a parameter of type void" x)
+            raise (Void_variable x)
           else
             Env.add x ty env
         ) global_env fdef.params
@@ -106,32 +164,34 @@ let typecheck_program (prog: prog) =
     let rec typecheck_instr = function
       | Putchar(e) ->
           if type_expr e <> Int then
-            error "putchar expects an integer (ascii code) argument"
+            failwith "putchar expects an integer (ascii code) argument"
       | Set(x, e) ->
         let t_e = type_expr e in
         let t_var = match Env.find_opt x local_env with
           | Some t -> t
-          | None -> error ("undefined variable " ^ x)
+          | None ->raise (Undefined_variable x)
         in
         if t_var <> t_e then
-          error "type error"
+          raise (Bad_assignement (t_var, x, t_e))
       | If(cond, t, f) ->
-          if type_expr cond <> Bool then
-            error "expecting a boolean expression in an if's condition"
+          let t_c = type_expr cond in
+          if t_c <> Bool then
+            raise (Bad_condition ("an if", t_c))
           else begin
             typecheck_seq t;
             typecheck_seq f
           end
       | While(cond, s) ->
-        if type_expr cond <> Bool then
-          error "expecting a boolean expression in while loop's condition"
+        let t_c = type_expr cond in
+        if t_c <> Bool then
+          raise (Bad_condition ("a while loop", t_c))
         else
           typecheck_seq s
       | Return(e) ->
         let t = type_expr e in
         begin match fdef.return, t with
-        | Void, _ -> error "cannot return a value from a void function"
-        | t1, t2 when t1 <> t2 -> error "mismatch between the returned value and the function's type"
+        | Void, _ -> failwith "cannot return a value from a void function"
+        | t1, t2 when t1 <> t2 -> raise (Return_value_mismatch (t1, t2))
         | _, _ -> ()
         end
       | Expr(e) -> ignore (type_expr e)
@@ -154,14 +214,18 @@ let typecheck_program (prog: prog) =
     
     (* On vérifie que la fonction renvoie bien une valeur *)
     if fdef.return <> Void && not (returns fdef.code) then
-      error "A non void function should return a value"
+      failwith "a non void function should return a value"
   in
 
-  (* Code principal du typage d'un programme : on type ses fonctions.
-     Il faudrait aussi vérifier les valeurs initiales des variables globales.
-     À COMPLÉTER
-   *)
-  List.iter typecheck_function (prog.functions)
+  (* Code principal du typage d'un programme : on type ses fonctions. *) 
+  List.iter (fun fdef ->
+    try
+      typecheck_function fdef
+    with
+    | e -> error (Local fdef.name) e
+  ) (prog.functions)
+
+
 
 (* Vérifications supplémentaires non liées au typage
    - redéfinition d'une variable dans un même portée
