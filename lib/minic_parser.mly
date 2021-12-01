@@ -19,12 +19,12 @@
 %token RETURN SET SEMI COMMA
 %token IF ELSE WHILE PUTCHAR
 %token INT BOOL VOID
-%token ADD MUL DIV
+%token ADD SUB MUL DIV
 %token LT
 %token EOF
 
 %nonassoc LT
-%left ADD
+%left SUB ADD
 %left DIV MUL
 
 %start program
@@ -99,6 +99,7 @@ expression:
 | n=CST                           { Cst(n) }
 | b=BOOL_CST                      { BCst(b) }
 | e1=expression ADD e2=expression { ArithmeticOp((+), e1, e2) }
+| e1=expression SUB e2=expression { ArithmeticOp((-), e1, e2) }
 | e1=expression MUL e2=expression { ArithmeticOp(( * ), e1, e2) }
 | e1=expression DIV e2=expression { ArithmeticOp((/), e1, e2) }
 | e1=expression LT e2=expression  { Lt(e1, e2) }

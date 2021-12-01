@@ -60,6 +60,8 @@ rule token = parse
       { END }
   | "+"
       { ADD }
+  | "-"
+      { SUB }
   | "*"
       { MUL }
   | "/"
