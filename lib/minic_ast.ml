@@ -4,13 +4,11 @@ type typ =
   | Bool
   | Void
 
-(* Représentation des expressions.
-   Ajouté : les constantes booléennes. *)
+(* Représentation des expressions. *)
 type expr =
   | Cst of int
   | BCst of bool
-  | Add of expr * expr
-  | Mul of expr * expr
+  | ArithmeticOp of (int -> int -> int) * expr * expr
   | Lt  of expr * expr
   | Get of string
   | Call of string * expr list

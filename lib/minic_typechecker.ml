@@ -44,7 +44,7 @@ let typecheck_program (prog: prog) =
       | Bad_condition (context, te) ->
         Printf.sprintf "expecting a bool expression in %s's condition, got %s" context (string_of_typ te)
       | Undefined_variable var ->
-        "undefined variable %s" ^ var
+        "undefined variable " ^ var
       | Void_variable var ->
         Printf.sprintf "'void %s': cannot define a variable of type void" var
       | Undefined_function f ->
@@ -71,7 +71,7 @@ let typecheck_program (prog: prog) =
     let rec type_expr = function
       | Cst _ -> Int
       | BCst _ -> Bool
-      | Add(e1, e2) | Mul(e1, e2) ->
+      | ArithmeticOp(_, e1, e2) ->
         begin match type_expr e1, type_expr e2 with
         | Int, Int -> Int
         | t1, t2 -> raise (Binary_operator_mismatch ("arithmetic", (Int, Int), (t1, t2)))
@@ -248,7 +248,7 @@ let strict_check (prog: prog) =
   let check_global_expression vars =
     let rec check_expr = function
     | Cst _ | BCst _ | Get _ -> ()
-    | Add(e1, e2) | Mul(e1, e2) | Lt(e1, e2) ->
+    | ArithmeticOp(_, e1, e2) | Lt(e1, e2) ->
       check_expr e1;
       check_expr e2
     | Call _ -> failwith "Cannot initialize a global variable with a function's result"

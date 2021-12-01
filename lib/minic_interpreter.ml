@@ -13,8 +13,7 @@ let interpret_program (prog: prog) =
   let rec eval_expr = function
     | Cst n -> n
     | BCst b -> int_of_bool b
-    | Add(e1, e2) -> eval_expr e1 + eval_expr e2
-    | Mul(e1, e2) -> eval_expr e1 * eval_expr e2
+    | ArithmeticOp(op, e1, e2) -> op (eval_expr e1) (eval_expr e2)
     | Lt(e1, e2) -> int_of_bool (eval_expr e1 < eval_expr e2)
     | Get x -> Hashtbl.find env x
     | Call(name, args) ->

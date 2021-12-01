@@ -19,12 +19,13 @@
 %token RETURN SET SEMI COMMA
 %token IF ELSE WHILE PUTCHAR
 %token INT BOOL VOID
-%token ADD MUL LT
+%token ADD MUL DIV
+%token LT
 %token EOF
 
 %nonassoc LT
 %left ADD
-%left MUL
+%left DIV MUL
 
 %start program
 %type <Minic_ast.prog> program
@@ -97,8 +98,9 @@ expression:
 | LPAR e=expression RPAR          { e }
 | n=CST                           { Cst(n) }
 | b=BOOL_CST                      { BCst(b) }
-| e1=expression ADD e2=expression { Add(e1, e2) }
-| e1=expression MUL e2=expression { Mul(e1, e2) }
+| e1=expression ADD e2=expression { ArithmeticOp((+), e1, e2) }
+| e1=expression MUL e2=expression { ArithmeticOp(( * ), e1, e2) }
+| e1=expression DIV e2=expression { ArithmeticOp((/), e1, e2) }
 | e1=expression LT e2=expression  { Lt(e1, e2) }
 | id=IDENT                        { Get(id) }
 | f=IDENT LPAR a=separated_list(COMMA, expression) RPAR { Call(f, a) }

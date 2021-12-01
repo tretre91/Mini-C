@@ -62,6 +62,8 @@ rule token = parse
       { ADD }
   | "*"
       { MUL }
+  | "/"
+      { DIV }
   | "<"
       { LT }
   | _
