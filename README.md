@@ -59,6 +59,9 @@ Une expression peut être sous une des formes suivantes :
 | égalité                       | `1 == 1`, `true != false` |
 | inégalité stricte             | `1 < 2`, `2 > 1`          |
 | inégalité large               | `1 <= 1`, `3 <= 4`        |
+| **Opérations logiques**       |                           |
+| et                            | `3 < 4 && true`           |
+| ou                            | `false || 1 == 2`         |
 | **Autres**                    |                           |
 | variable                      | `x`                       |
 | appel de fonction             | `foo(5, false)`           |

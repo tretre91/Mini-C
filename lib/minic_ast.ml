@@ -12,6 +12,7 @@ type expr =
   | Eq of expr * expr
   | Neq of expr * expr
   | ComparisonOp of (int -> int -> bool) * expr * expr
+  | LogicalOp of (bool -> bool -> bool) * expr * expr
   | Get of string
   | Call of string * expr list
 

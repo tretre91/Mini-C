@@ -9,12 +9,14 @@ let interpret_program (prog: prog) =
   let env = Hashtbl.create 256 in
   
   let int_of_bool b = if b then 1 else 0 in
+  let bool_of_int i = i <> 0 in
 
   let rec eval_expr = function
     | Cst n -> n
     | BCst b -> int_of_bool b
     | ArithmeticOp(op, e1, e2) -> op (eval_expr e1) (eval_expr e2)
     | ComparisonOp(op, e1, e2) -> int_of_bool (op (eval_expr e1) (eval_expr e2))
+    | LogicalOp(op, e1, e2) -> int_of_bool (op (bool_of_int (eval_expr e1)) (bool_of_int (eval_expr e2)))
     | Eq(e1, e2) -> int_of_bool (eval_expr e1 = eval_expr e2)
     | Neq(e1, e2) -> int_of_bool (eval_expr e1 <> eval_expr e2)
     | Get x -> Hashtbl.find env x

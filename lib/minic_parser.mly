@@ -22,8 +22,11 @@
 %token ADD SUB MUL DIV
 %token EQ NEQ
 %token LT LEQ GT GEQ
+%token AND OR
 %token EOF
 
+%left OR
+%left AND
 %left EQ NEQ
 %nonassoc LT LEQ GT GEQ
 %left SUB ADD
@@ -110,6 +113,8 @@ expression:
 | e1=expression LEQ e2=expression { ComparisonOp((<=), e1, e2) }
 | e1=expression GT e2=expression  { ComparisonOp((>), e1, e2) }
 | e1=expression GEQ e2=expression { ComparisonOp((>=), e1, e2) }
+| e1=expression AND e2=expression { LogicalOp((&&), e1, e2) }
+| e1=expression OR e2=expression  { LogicalOp((||), e1, e2) }
 | id=IDENT                        { Get(id) }
 | f=IDENT LPAR a=separated_list(COMMA, expression) RPAR { Call(f, a) }
 ;
