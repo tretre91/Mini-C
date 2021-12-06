@@ -61,7 +61,7 @@ Une expression peut être sous une des formes suivantes :
 | inégalité large               | `1 <= 1`, `3 <= 4`        |
 | **Opérations logiques**       |                           |
 | et                            | `3 < 4 && true`           |
-| ou                            | `false || 1 == 2`         |
+| ou                            | `false \|\| 1 == 2`       |
 | **Autres**                    |                           |
 | variable                      | `x`                       |
 | appel de fonction             | `foo(5, false)`           |
