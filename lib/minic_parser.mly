@@ -103,18 +103,18 @@ expression:
 | LPAR e=expression RPAR          { e }
 | n=CST                           { Cst(n) }
 | b=BOOL_CST                      { BCst(b) }
-| e1=expression ADD e2=expression { ArithmeticOp((+), e1, e2) }
-| e1=expression SUB e2=expression { ArithmeticOp((-), e1, e2) }
-| e1=expression MUL e2=expression { ArithmeticOp(( * ), e1, e2) }
-| e1=expression DIV e2=expression { ArithmeticOp((/), e1, e2) }
-| e1=expression EQ e2=expression  { Eq(e1, e2) }
-| e1=expression NEQ e2=expression { Neq(e1, e2) }
-| e1=expression LT e2=expression  { ComparisonOp((<), e1, e2) }
-| e1=expression LEQ e2=expression { ComparisonOp((<=), e1, e2) }
-| e1=expression GT e2=expression  { ComparisonOp((>), e1, e2) }
-| e1=expression GEQ e2=expression { ComparisonOp((>=), e1, e2) }
-| e1=expression AND e2=expression { LogicalOp((&&), e1, e2) }
-| e1=expression OR e2=expression  { LogicalOp((||), e1, e2) }
+| e1=expression ADD e2=expression { BinaryOperator(Arithmetic(+), e1, e2) }
+| e1=expression SUB e2=expression { BinaryOperator(Arithmetic(-), e1, e2) }
+| e1=expression MUL e2=expression { BinaryOperator(Arithmetic( * ), e1, e2) }
+| e1=expression DIV e2=expression { BinaryOperator(Arithmetic(/), e1, e2) }
+| e1=expression EQ e2=expression  { BinaryOperator(Equality, e1, e2) }
+| e1=expression NEQ e2=expression { BinaryOperator(Inequality, e1, e2) }
+| e1=expression LT e2=expression  { BinaryOperator(Comparison(<), e1, e2) }
+| e1=expression LEQ e2=expression { BinaryOperator(Comparison(<=), e1, e2) }
+| e1=expression GT e2=expression  { BinaryOperator(Comparison(>), e1, e2) }
+| e1=expression GEQ e2=expression { BinaryOperator(Comparison(>=), e1, e2) }
+| e1=expression AND e2=expression { BinaryOperator(Logical(&&), e1, e2) }
+| e1=expression OR e2=expression  { BinaryOperator(Logical(||), e1, e2) }
 | id=IDENT                        { Get(id) }
 | f=IDENT LPAR a=separated_list(COMMA, expression) RPAR { Call(f, a) }
 ;

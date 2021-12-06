@@ -14,11 +14,16 @@ let interpret_program (prog: prog) =
   let rec eval_expr = function
     | Cst n -> n
     | BCst b -> int_of_bool b
-    | ArithmeticOp(op, e1, e2) -> op (eval_expr e1) (eval_expr e2)
-    | ComparisonOp(op, e1, e2) -> int_of_bool (op (eval_expr e1) (eval_expr e2))
-    | LogicalOp(op, e1, e2) -> int_of_bool (op (bool_of_int (eval_expr e1)) (bool_of_int (eval_expr e2)))
-    | Eq(e1, e2) -> int_of_bool (eval_expr e1 = eval_expr e2)
-    | Neq(e1, e2) -> int_of_bool (eval_expr e1 <> eval_expr e2)
+    | BinaryOperator(op, e1, e2) ->
+      let v1 = eval_expr e1 in
+      let v2 = eval_expr e2 in
+      begin match op with
+      | Arithmetic f -> f v1 v2
+      | Comparison f -> int_of_bool (f v1 v2)
+      | Logical f -> int_of_bool (f (bool_of_int v1) (bool_of_int v2))
+      | Equality -> int_of_bool (v1 = v2)
+      | Inequality -> int_of_bool (v1 <> v2)
+      end
     | Get x -> Hashtbl.find env x
     | Call(name, args) ->
       let fn = List.find (fun fdef -> fdef.name = name) prog.functions in

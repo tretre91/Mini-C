@@ -4,15 +4,19 @@ type typ =
   | Bool
   | Void
 
+(* Types des opérations binaires *)
+type binop =
+  | Arithmetic of (int -> int -> int)
+  | Comparison of (int -> int -> bool)
+  | Logical of (bool -> bool -> bool)
+  | Equality
+  | Inequality
+
 (* Représentation des expressions. *)
 type expr =
   | Cst of int
   | BCst of bool
-  | ArithmeticOp of (int -> int -> int) * expr * expr
-  | Eq of expr * expr
-  | Neq of expr * expr
-  | ComparisonOp of (int -> int -> bool) * expr * expr
-  | LogicalOp of (bool -> bool -> bool) * expr * expr
+  | BinaryOperator of binop * expr * expr
   | Get of string
   | Call of string * expr list
 

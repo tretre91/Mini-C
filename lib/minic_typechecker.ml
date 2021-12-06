@@ -10,9 +10,7 @@ exception Bad_condition of string * typ
 exception Undefined_variable of string
 exception Void_variable of string
 exception Undefined_function of string
-(* nom de l'opérateur, types attendus des opérandes gauche et droits, type des expressions *)
-exception Binary_operator_mismatch of string * (typ * typ) * (typ * typ)
-exception Equality_operator_mismatch of typ * typ
+exception Binary_operator_mismatch of binop * typ * typ
 (* nom de la fonction, nom du paramètre, type du paramètre, type de l'expression *)
 exception Bad_function_arg of string * string * typ * typ
 (* type de la fonction, type de l'expression renvoyée *)
@@ -50,13 +48,15 @@ let typecheck_program (prog: prog) =
         Printf.sprintf "'void %s': cannot define a variable of type void" var
       | Undefined_function f ->
         "call to undefined function " ^ f
-      | Binary_operator_mismatch (op_type, expected, got) ->
-        let se1, se2 = string_of_typ (fst expected), string_of_typ (snd expected) in
-        let sg1, sg2 = string_of_typ (fst got), string_of_typ (snd got) in
-        Printf.sprintf "%s operator expects %s (lhs) and %s (rhs) expressions, got %s and %s" op_type se1 se2 sg1 sg2
-      | Equality_operator_mismatch (t1, t2) ->
-        let s1, s2 = string_of_typ t1, string_of_typ t2 in
-        Printf.sprintf "equality operator expects both arguments to be of the same type, got %s and %s" s1 s2
+      | Binary_operator_mismatch (op, t1, t2) ->
+        let st1 = string_of_typ t1 in
+        let st2 = string_of_typ t2 in
+        Printf.sprintf (match op with
+        | Arithmetic _ -> "an arithmetic operator expects both its arguments to be of type int, got %s and %s instead"
+        | Comparison _ -> "a comparison operator expects both its arguments to be of type int, got %s and %s instead"
+        | Logical _ -> "a logical operator expects both its arguments to be of type bool, got %s and %s instead"
+        | Equality | Inequality -> "an equality operator expects both its argument to be of the same type, got %s and %s"
+        ) st1 st2
       | Bad_function_arg (f, param, tp, te) ->
         let stp = string_of_typ tp in
         let ste = string_of_typ te in
@@ -75,27 +75,15 @@ let typecheck_program (prog: prog) =
     let rec type_expr = function
       | Cst _ -> Int
       | BCst _ -> Bool
-      | ArithmeticOp(_, e1, e2) ->
-        begin match type_expr e1, type_expr e2 with
-        | Int, Int -> Int
-        | t1, t2 -> raise (Binary_operator_mismatch ("arithmetic", (Int, Int), (t1, t2)))
-        end
-      | Eq(e1, e2) | Neq(e1, e2) ->
+      | BinaryOperator(op, e1, e2) ->
         let t1 = type_expr e1 in
         let t2 = type_expr e2 in
-        if t1 = t2 then
-          Bool
-        else
-          raise (Equality_operator_mismatch (t1, t2))
-      | ComparisonOp(_, e1, e2) ->
-        begin match type_expr e1, type_expr e2 with
-        | Int, Int -> Bool
-        | t1, t2 ->  raise (Binary_operator_mismatch ("comparison", (Int, Int), (t1, t2)))
-        end
-      | LogicalOp(_, e1, e2) ->
-        begin match type_expr e1, type_expr e2 with
-        | Bool, Bool -> Bool
-        | t1, t2 ->  raise (Binary_operator_mismatch ("logical", (Bool, Bool), (t1, t2)))
+        begin match op, t1, t2 with
+        | Arithmetic _, Int, Int -> Int
+        | Comparison _, Int, Int -> Bool
+        | Logical _, Bool, Bool -> Bool
+        | Equality, _, _ | Inequality, _, _ when t1 = t2 -> Bool
+        | _, _, _ -> raise (Binary_operator_mismatch (op, t1, t2))
         end
       | Get(x) ->
         begin match Env.find_opt x env with
@@ -264,10 +252,10 @@ let strict_check (prog: prog) =
   let check_global_expression vars =
     let rec check_expr = function
     | Cst _ | BCst _ | Get _ -> ()
-    | ArithmeticOp(_, e1, e2) | ComparisonOp(_, e1, e2) | LogicalOp(_, e1, e2) | Eq(e1, e2) | Neq(e1, e2) ->
+    | BinaryOperator(_, e1, e2) ->
       check_expr e1;
       check_expr e2
-    | Call _ -> failwith "Cannot initialize a global variable with a function's result"
+    | Call _ -> failwith "Cannot initialize a global variable with a function call"
     in
     List.iter (fun (_, _, e) -> check_expr e) vars
   in
