@@ -23,7 +23,11 @@
     fun s ->
       try  Hashtbl.find h s
       with Not_found -> IDENT(s)
-        
+  
+  (* Quitte le programme et affiche un message d'erreur indiquant l'emplacement de l'erreur *)
+  let error message pos =
+    Printf.fprintf stderr "error at (%d, %d): %s" pos.pos_lnum (pos.pos_cnum - pos.pos_bol) message;
+    exit 1
 }
 
 (* Règles auxiliaires *)
@@ -31,6 +35,7 @@ let digit = ['0'-'9']
 let number = ['-']? digit+
 let alpha = ['a'-'z' 'A'-'Z']
 let ident = alpha (alpha | '_' | digit)*
+let comment = "//"[^'\n']*
 
 (* Règles de reconnaissance 
    À COMPLÉTER
@@ -40,6 +45,10 @@ rule token = parse
       { new_line lexbuf; token lexbuf }
   | [' ' '\t' '\r']+
       { token lexbuf }
+  | comment
+      { token lexbuf }
+  | "/*"
+      { multiline_comment (lexeme_start_p lexbuf) lexbuf }
   | number as n
       { CST(int_of_string n) }
   | ident as id
@@ -83,6 +92,15 @@ rule token = parse
   | "||"
       { OR }
   | _
-      { failwith ("Unknown character : " ^ (lexeme lexbuf)) }
+      { error ("Unknown character : " ^ (lexeme lexbuf)) (lexeme_start_p lexbuf) }
   | eof
       { EOF }
+and multiline_comment start_pos = parse
+  | ['\n']
+      { new_line lexbuf; multiline_comment start_pos lexbuf }
+  | "*/"
+      { token lexbuf }
+  | _
+      { multiline_comment start_pos lexbuf }
+  | eof
+      { error "Forgot to close this multiline comment" start_pos }
