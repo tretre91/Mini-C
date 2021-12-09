@@ -52,10 +52,10 @@ let typecheck_program (prog: prog) =
         let st1 = string_of_typ t1 in
         let st2 = string_of_typ t2 in
         Printf.sprintf (match op with
-        | Arithmetic _ -> "an arithmetic operator expects both its arguments to be of type int, got %s and %s instead"
-        | Comparison _ -> "a comparison operator expects both its arguments to be of type int, got %s and %s instead"
-        | Logical _ -> "a logical operator expects both its arguments to be of type bool, got %s and %s instead"
-        | Equality | Inequality -> "an equality operator expects both its argument to be of the same type, got %s and %s"
+        | Add | Sub | Mult | Div -> "an arithmetic operator expects both its arguments to be of type int, got %s and %s instead"
+        | Lt | Leq | Gt | Geq -> "a comparison operator expects both its arguments to be of type int, got %s and %s instead"
+        | And | Or -> "a logical operator expects both its arguments to be of type bool, got %s and %s instead"
+        | Eq | Neq -> "an equality operator expects both its argument to be of the same type, got %s and %s"
         ) st1 st2
       | Bad_function_arg (f, param, tp, te) ->
         let stp = string_of_typ tp in
@@ -79,10 +79,10 @@ let typecheck_program (prog: prog) =
         let t1 = type_expr e1 in
         let t2 = type_expr e2 in
         begin match op, t1, t2 with
-        | Arithmetic _, Int, Int -> Int
-        | Comparison _, Int, Int -> Bool
-        | Logical _, Bool, Bool -> Bool
-        | Equality, _, _ | Inequality, _, _ when t1 = t2 -> Bool
+        | (Add | Sub | Mult | Div), Int, Int -> Int
+        | (Lt | Leq | Gt | Geq), Int, Int -> Bool
+        | (And | Or), Bool, Bool -> Bool
+        | (Eq | Neq), _, _ when t1 = t2 -> Bool
         | _, _, _ -> raise (Binary_operator_mismatch (op, t1, t2))
         end
       | Get(x) ->

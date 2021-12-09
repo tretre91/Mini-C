@@ -6,11 +6,9 @@ type typ =
 
 (* Types des opérations binaires *)
 type binop =
-  | Arithmetic of (int -> int -> int)
-  | Comparison of (int -> int -> bool)
-  | Logical of (bool -> bool -> bool)
-  | Equality
-  | Inequality
+  | Add | Sub | Mult | Div
+  | Eq | Neq | Lt | Leq | Gt | Geq
+  | And | Or
 
 (* Représentation des expressions. *)
 type expr =

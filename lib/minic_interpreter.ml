@@ -11,19 +11,29 @@ let interpret_program (prog: prog) =
   let int_of_bool b = if b then 1 else 0 in
   let bool_of_int i = i <> 0 in
 
+  let apply_binop (op: binop) (v1: int) (v2: int) =
+    match op with
+    | Add -> v1 + v2
+    | Sub -> v1 - v2
+    | Mult-> v1 * v2
+    | Div -> v1 / v2
+    | Eq  -> int_of_bool (v1 = v2)
+    | Neq -> int_of_bool (v1 <> v2)
+    | Lt  -> int_of_bool (v1 < v2)
+    | Leq -> int_of_bool (v1 <= v2)
+    | Gt  -> int_of_bool (v1 > v2)
+    | Geq -> int_of_bool (v1 >= v2)
+    | And -> int_of_bool (bool_of_int v1 && bool_of_int v2)
+    | Or  -> int_of_bool (bool_of_int v1 || bool_of_int v2)
+  in
+
   let rec eval_expr = function
     | Cst n -> n
     | BCst b -> int_of_bool b
     | BinaryOperator(op, e1, e2) ->
       let v1 = eval_expr e1 in
       let v2 = eval_expr e2 in
-      begin match op with
-      | Arithmetic f -> f v1 v2
-      | Comparison f -> int_of_bool (f v1 v2)
-      | Logical f -> int_of_bool (f (bool_of_int v1) (bool_of_int v2))
-      | Equality -> int_of_bool (v1 = v2)
-      | Inequality -> int_of_bool (v1 <> v2)
-      end
+      apply_binop op v1 v2
     | Get x -> Hashtbl.find env x
     | Call(name, args) ->
       let fn = List.find (fun fdef -> fdef.name = name) prog.functions in
