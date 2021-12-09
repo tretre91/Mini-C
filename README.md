@@ -6,13 +6,24 @@ Projet pour le cours de compilation.
 
 Un programme Mini-C est composé d'une suite de déclaration de variables globales suivie de déclarations de fonctions
 
+### Commentaires
+
+Les commentaires simples (`// ...`) et multilignes (`/* ... */`) sont supportés.
+
+**Remarque :** les commentaires multilignes s'arrêtent au premier `*/` rencontré, par exemple le fragment de code suivant produira une erreur
+```rs
+/*
+  Un commentaire /* Dans un autre commentaire */
+*/
+```
+
 ### Types
 
 Les types disponibles sont `int`, `bool` et `void` (seulement pour les fonctions).
 
 ### Variables globales
 
-Une variable globale ne peut pas avoir comme valeur initiale
+Les variables globales sont définies au début du fichier et ne peuvent pas être initialisées avec le résultat d'un appel de fonction (voir [plus bas](#vérifications-supplémentaires)), elles sont accessibles n'importe où dans le programme.
 
 ### Fonctions
 
