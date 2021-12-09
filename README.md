@@ -129,3 +129,16 @@ int main() {
 ```
 
 Dans ce code, l'appel à `count` utilise la variable globale `c` qui n'est pas encore définie à ce niveau de l'initialisation des variables globales, l'exécution du programme échouera.
+
+### Afficheur
+
+Il est possible de reconstruire un fichier source à partir d'un arbre de syntaxe à l'aide de la fonction `print_program : prog -> out_channel -> unit` du module `Libminic.Minic_display` qui traduit un ast en code source qui sera écrit dans une variable de type `out_channel`.
+
+Pour reconstruire un programme on peut utiliser l'option `-d` :
+```
+minic prog.mnc -d
+```
+Sans argument le code source est envoyé sur la sortie standard, on peut également donner un fichier en argument :
+```
+minic prog.mnc -d code.out
+```

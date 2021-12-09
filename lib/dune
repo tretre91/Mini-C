@@ -10,4 +10,5 @@
     minic_parser
     minic_ast
     minic_typechecker
-    minic_interpreter))
+    minic_interpreter
+    minic_display))
