@@ -1,0 +1,16 @@
+(executable
+ (name interpreter)
+ (libraries libminic))
+
+(rule
+ (deps
+  (source_tree %{workspace_root}))
+ (action
+  (with-stdout-to
+   interpreter.output
+   (run ./interpreter.exe))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff interpreter.expected interpreter.output)))

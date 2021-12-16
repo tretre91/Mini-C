@@ -5,7 +5,7 @@ int mod(int a, int b) {
   return a;
 }
 
-void halfaphabet() {
+void halfabet() {
   int c = 97;
   while (c != 123) {
     if (mod(c, 2) == 1) {
@@ -31,6 +31,6 @@ int main() {
     }
   }
 
-  halfaphabet();
+  halfabet();
   return 0;
 }

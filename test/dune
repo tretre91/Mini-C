@@ -1,5 +1,0 @@
-(test
-  (name check)
-  (libraries libminic)
-  (deps
-	  (source_tree %{workspace_root})))

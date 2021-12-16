@@ -1,14 +1,16 @@
 (ocamllex
-  (modules minic_lexer))
+ (modules minic_lexer))
+
 (menhir
-  (flags --explain --dump)
-  (modules minic_parser))
+ (flags --explain --dump)
+ (modules minic_parser))
+
 (library
-  (name libminic)
-  (modules
-    minic_lexer
-    minic_parser
-    minic_ast
-    minic_typechecker
-    minic_interpreter
-    minic_display))
+ (name libminic)
+ (modules
+  minic_lexer
+  minic_parser
+  minic_ast
+  minic_typechecker
+  minic_interpreter
+  minic_display))
