@@ -20,7 +20,7 @@ let test () =
   |> Array.to_list
   |> List.filter (fun file -> Filename.check_suffix file ".mnc")
   |> List.sort compare
-  |> List.iter (fun f -> Printf.fprintf stderr "Interpreting file %s\n" f; interpret_file f)
+  |> List.iter interpret_file
 
 let () =
   test ()

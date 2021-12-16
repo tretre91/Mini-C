@@ -1,0 +1,23 @@
+int mod(int a, int b) {
+  while(b < a + 1) {
+    a = a - b;
+  }
+  return a;
+}
+
+void halfabet() /* commentaire */ {
+  int c = 97;
+  while (c < 123) {
+    if (mod(c, 2) == 1) {
+      putchar(c);
+    } else {
+
+    }
+    c = c + 1;
+  }
+}
+
+int main() {
+  halfabet();
+  return 0;
+}

@@ -28,7 +28,7 @@ type instr =
   | Expr of expr
 and seq = instr list
 
-(* Représentétion des fonctions. *)
+(* Représentation des fonctions. *)
 type fun_def = {
   name: string;
   params: (string * typ) list;
