@@ -57,7 +57,7 @@ let interpret_program (prog: prog) =
     in
     List.iter (Hashtbl.remove env) local_vars;
     retval
-  and eval_seq (instructions: instr list): unit =
+  and eval_seq (instructions: seq): unit =
     List.iter eval_instr instructions
   and eval_instr (i: instr): unit = match i with
     | Putchar e -> 
