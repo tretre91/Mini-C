@@ -103,6 +103,8 @@ expression:
 | LPAR e=expression RPAR          { e }
 | n=CST                           { Cst(n) }
 | b=BOOL_CST                      { BCst(b) }
+| SUB e=expression                { UnaryOperator(Minus, e) }
+| ADD e=expression                { e }
 | e1=expression ADD e2=expression { BinaryOperator(Add, e1, e2) }
 | e1=expression SUB e2=expression { BinaryOperator(Sub, e1, e2) }
 | e1=expression MUL e2=expression { BinaryOperator(Mult, e1, e2) }

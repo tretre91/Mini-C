@@ -10,10 +10,15 @@ type binop =
   | Eq | Neq | Lt | Leq | Gt | Geq
   | And | Or
 
+(* Types des opérations unaires *)
+type unop =
+  | Minus
+
 (* Représentation des expressions. *)
 type expr =
   | Cst of int
   | BCst of bool
+  | UnaryOperator of unop * expr
   | BinaryOperator of binop * expr * expr
   | Get of string
   | Call of string * expr list

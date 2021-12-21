@@ -8,6 +8,10 @@ let print_program (prog: prog) (out: out_channel) =
     | Void -> "void"
   in
 
+  let string_of_unop = function
+    | Minus -> "-"
+  in
+  
   let string_of_binop = function
     | Add -> "+"
     | Sub -> "-"
@@ -27,6 +31,9 @@ let print_program (prog: prog) (out: out_channel) =
     match e with
     | Cst n -> string_of_int n
     | BCst b -> string_of_bool b
+    | UnaryOperator(op, e) ->
+      let s = string_of_expr e in
+      string_of_unop op ^ s
     | BinaryOperator(op, e1, e2) ->
       let s1 = string_of_expr e1 in
       let s2 = string_of_expr e2 in

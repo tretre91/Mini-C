@@ -11,6 +11,11 @@ let interpret_program (prog: prog) =
   let int_of_bool b = if b then 1 else 0 in
   let bool_of_int i = i <> 0 in
 
+  let apply_unop (op: unop) (v: int) =
+    match op with
+    | Minus -> -v
+  in
+
   let apply_binop (op: binop) (v1: int) (v2: int) =
     match op with
     | Add -> v1 + v2
@@ -30,6 +35,9 @@ let interpret_program (prog: prog) =
   let rec eval_expr = function
     | Cst n -> n
     | BCst b -> int_of_bool b
+    | UnaryOperator(op, e) ->
+      let v = eval_expr e in
+      apply_unop op v
     | BinaryOperator(op, e1, e2) ->
       let v1 = eval_expr e1 in
       let v2 = eval_expr e2 in

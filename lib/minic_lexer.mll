@@ -32,7 +32,7 @@
 
 (* Règles auxiliaires *)
 let digit = ['0'-'9']
-let number = ['-']? digit+
+let number = digit+
 let alpha = ['a'-'z' 'A'-'Z']
 let ident = alpha (alpha | '_' | digit)*
 let comment = "//"[^'\n']*

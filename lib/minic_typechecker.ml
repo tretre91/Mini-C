@@ -10,6 +10,7 @@ exception Bad_condition of string * typ
 exception Undefined_variable of string
 exception Void_variable of string
 exception Undefined_function of string
+exception Unary_operator_mismatch of unop * typ
 exception Binary_operator_mismatch of binop * typ * typ
 (* nom de la fonction, nom du paramètre, type du paramètre, type de l'expression *)
 exception Bad_function_arg of string * string * typ * typ
@@ -48,6 +49,11 @@ let typecheck_program (prog: prog) =
         Printf.sprintf "'void %s': cannot define a variable of type void" var
       | Undefined_function f ->
         "call to undefined function " ^ f
+      | Unary_operator_mismatch (op, t) ->
+        let st = string_of_typ t in
+        begin match op with
+        | Minus -> "unary minus expects an integer expression, got " ^ st
+        end
       | Binary_operator_mismatch (op, t1, t2) ->
         let st1 = string_of_typ t1 in
         let st2 = string_of_typ t2 in
@@ -75,6 +81,12 @@ let typecheck_program (prog: prog) =
     let rec type_expr = function
       | Cst _ -> Int
       | BCst _ -> Bool
+      | UnaryOperator(op, e) ->
+        let t = type_expr e in
+        begin match op, t with
+        | Minus, Int -> Int
+        | Minus, _ -> raise (Unary_operator_mismatch (op, t))
+        end
       | BinaryOperator(op, e1, e2) ->
         let t1 = type_expr e1 in
         let t2 = type_expr e2 in
@@ -252,6 +264,8 @@ let strict_check (prog: prog) =
   let check_global_expression vars =
     let rec check_expr = function
     | Cst _ | BCst _ | Get _ -> ()
+    | UnaryOperator(_, e) ->
+      check_expr e
     | BinaryOperator(_, e1, e2) ->
       check_expr e1;
       check_expr e2
