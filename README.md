@@ -66,6 +66,7 @@ Une expression peut être sous une des formes suivantes :
 | soustraction                  | `1 - 5`                   |
 | multiplication                | `(1 + 1) * 2`             |
 | division                      | `10 / 2`                  |
+| modulo                        | `18 % 3`                  |
 | **Opérations de comparaison** |                           |
 | égalité                       | `1 == 1`, `true != false` |
 | inégalité stricte             | `1 < 2`, `2 > 1`          |
