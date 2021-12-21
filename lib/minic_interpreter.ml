@@ -15,22 +15,26 @@ let interpret_program (prog: prog) =
     match op with
     | Minus -> -v
     | Not -> int_of_bool (not (bool_of_int v))
+    | BNot -> lnot v
   in
 
   let apply_binop (op: binop) (v1: int) (v2: int) =
     match op with
-    | Add -> v1 + v2
-    | Sub -> v1 - v2
-    | Mult-> v1 * v2
-    | Div -> v1 / v2
-    | Eq  -> int_of_bool (v1 = v2)
-    | Neq -> int_of_bool (v1 <> v2)
-    | Lt  -> int_of_bool (v1 < v2)
-    | Leq -> int_of_bool (v1 <= v2)
-    | Gt  -> int_of_bool (v1 > v2)
-    | Geq -> int_of_bool (v1 >= v2)
-    | And -> int_of_bool (bool_of_int v1 && bool_of_int v2)
-    | Or  -> int_of_bool (bool_of_int v1 || bool_of_int v2)
+    | Add  -> v1 + v2
+    | Sub  -> v1 - v2
+    | Mult -> v1 * v2
+    | Div  -> v1 / v2
+    | Eq   -> int_of_bool (v1 = v2)
+    | Neq  -> int_of_bool (v1 <> v2)
+    | Lt   -> int_of_bool (v1 < v2)
+    | Leq  -> int_of_bool (v1 <= v2)
+    | Gt   -> int_of_bool (v1 > v2)
+    | Geq  -> int_of_bool (v1 >= v2)
+    | And  -> int_of_bool (bool_of_int v1 && bool_of_int v2)
+    | Or   -> int_of_bool (bool_of_int v1 || bool_of_int v2)
+    | BAnd -> v1 land v2
+    | BOr  -> v1 lor v2
+    | BXor -> v1 lxor v2
   in
 
   let rec eval_expr = function

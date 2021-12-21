@@ -93,6 +93,14 @@ rule token = parse
       { OR }
   | "!"
       { NOT }
+  | "&"
+      { BAND }
+  | "|"
+      { BOR }
+  | "^"
+      { BXOR }
+  | "~"
+      { BNOT }
   | _
       { error ("Unknown character : " ^ (lexeme lexbuf)) (lexeme_start_p lexbuf) }
   | eof

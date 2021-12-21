@@ -9,11 +9,13 @@ type binop =
   | Add | Sub | Mult | Div
   | Eq | Neq | Lt | Leq | Gt | Geq
   | And | Or
+  | BAnd | BOr | BXor
 
 (* Types des opérations unaires *)
 type unop =
   | Minus
   | Not
+  | BNot
 
 (* Représentation des expressions. *)
 type expr =

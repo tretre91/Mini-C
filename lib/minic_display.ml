@@ -10,22 +10,26 @@ let print_program (prog: prog) (out: out_channel) =
 
   let string_of_unop = function
     | Minus -> "-"
-    | Not -> "!"
+    | Not   -> "!"
+    | BNot  -> "~"
   in
   
   let string_of_binop = function
-    | Add -> "+"
-    | Sub -> "-"
-    | Mult-> "*"
-    | Div -> "/"
-    | Eq  -> "=="
-    | Neq -> "!="
-    | Lt  -> "<"
-    | Leq -> "<="
-    | Gt  -> ">"
-    | Geq -> ">="
-    | And -> "&&"
-    | Or  -> "||"
+    | Add  -> "+"
+    | Sub  -> "-"
+    | Mult -> "*"
+    | Div  -> "/"
+    | Eq   -> "=="
+    | Neq  -> "!="
+    | Lt   -> "<"
+    | Leq  -> "<="
+    | Gt   -> ">"
+    | Geq  -> ">="
+    | And  -> "&&"
+    | Or   -> "||"
+    | BAnd -> "&"
+    | BOr  -> "|"
+    | BXor -> "^"
   in
 
   let rec string_of_expr (e: expr) =

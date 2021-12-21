@@ -54,6 +54,7 @@ let typecheck_program (prog: prog) =
         begin match op with
         | Minus -> "unary minus expects an integer expression, got " ^ st
         | Not -> "boolean not excpects an expression of type bool, got " ^ st
+        | BNot -> "bitwise not expects an integer, got " ^ st
         end
       | Binary_operator_mismatch (op, t1, t2) ->
         let st1 = string_of_typ t1 in
@@ -63,6 +64,7 @@ let typecheck_program (prog: prog) =
         | Lt | Leq | Gt | Geq -> "a comparison operator expects both its arguments to be of type int, got %s and %s instead"
         | And | Or -> "a logical operator expects both its arguments to be of type bool, got %s and %s instead"
         | Eq | Neq -> "an equality operator expects both its argument to be of the same type, got %s and %s"
+        | BAnd | BOr | BXor -> "a bitwise operator expects both its arguments to be of type int, got %s and %s"
         ) st1 st2
       | Bad_function_arg (f, param, tp, te) ->
         let stp = string_of_typ tp in
@@ -87,13 +89,14 @@ let typecheck_program (prog: prog) =
         begin match op, t with
         | Minus, Int -> Int
         | Not, Bool -> Bool
+        | BNot, Int -> Int
         | _, _ -> raise (Unary_operator_mismatch (op, t))
         end
       | BinaryOperator(op, e1, e2) ->
         let t1 = type_expr e1 in
         let t2 = type_expr e2 in
         begin match op, t1, t2 with
-        | (Add | Sub | Mult | Div), Int, Int -> Int
+        | (Add | Sub | Mult | Div | BAnd | BOr | BXor), Int, Int -> Int
         | (Lt | Leq | Gt | Geq), Int, Int -> Bool
         | (And | Or), Bool, Bool -> Bool
         | (Eq | Neq), _, _ when t1 = t2 -> Bool

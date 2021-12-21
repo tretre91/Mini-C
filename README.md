@@ -71,8 +71,14 @@ Une expression peut être sous une des formes suivantes :
 | inégalité stricte             | `1 < 2`, `2 > 1`          |
 | inégalité large               | `1 <= 1`, `3 <= 4`        |
 | **Opérations logiques**       |                           |
+| négation                      | `!true`                   |
 | et                            | `3 < 4 && true`           |
 | ou                            | `false \|\| 1 == 2`       |
+| **Opérations bit-à-bit**      |                           |
+| négation                      | `~1`                      |
+| et                            | `1 + 2 & 3`               |
+| ou                            | `64 | 63`                 |
+| ou exclusif                   | `127 ^ 255`               |
 | **Autres**                    |                           |
 | variable                      | `x`                       |
 | appel de fonction             | `foo(5, false)`           |
