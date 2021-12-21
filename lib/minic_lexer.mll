@@ -91,6 +91,8 @@ rule token = parse
       { AND }
   | "||"
       { OR }
+  | "!"
+      { NOT }
   | _
       { error ("Unknown character : " ^ (lexeme lexbuf)) (lexeme_start_p lexbuf) }
   | eof

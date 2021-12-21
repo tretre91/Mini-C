@@ -10,6 +10,7 @@ let print_program (prog: prog) (out: out_channel) =
 
   let string_of_unop = function
     | Minus -> "-"
+    | Not -> "!"
   in
   
   let string_of_binop = function

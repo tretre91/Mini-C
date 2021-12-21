@@ -14,6 +14,7 @@ let interpret_program (prog: prog) =
   let apply_unop (op: unop) (v: int) =
     match op with
     | Minus -> -v
+    | Not -> int_of_bool (not (bool_of_int v))
   in
 
   let apply_binop (op: binop) (v1: int) (v2: int) =

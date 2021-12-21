@@ -53,6 +53,7 @@ let typecheck_program (prog: prog) =
         let st = string_of_typ t in
         begin match op with
         | Minus -> "unary minus expects an integer expression, got " ^ st
+        | Not -> "boolean not excpects an expression of type bool, got " ^ st
         end
       | Binary_operator_mismatch (op, t1, t2) ->
         let st1 = string_of_typ t1 in
@@ -85,7 +86,8 @@ let typecheck_program (prog: prog) =
         let t = type_expr e in
         begin match op, t with
         | Minus, Int -> Int
-        | Minus, _ -> raise (Unary_operator_mismatch (op, t))
+        | Not, Bool -> Bool
+        | _, _ -> raise (Unary_operator_mismatch (op, t))
         end
       | BinaryOperator(op, e1, e2) ->
         let t1 = type_expr e1 in

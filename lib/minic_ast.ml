@@ -13,6 +13,7 @@ type binop =
 (* Types des opérations unaires *)
 type unop =
   | Minus
+  | Not
 
 (* Représentation des expressions. *)
 type expr =

@@ -22,7 +22,7 @@
 %token ADD SUB MUL DIV
 %token EQ NEQ
 %token LT LEQ GT GEQ
-%token AND OR
+%token AND OR NOT
 %token EOF
 
 %left OR
@@ -31,6 +31,7 @@
 %nonassoc LT LEQ GT GEQ
 %left SUB ADD
 %left DIV MUL
+%nonassoc NOT
 
 %start program
 %type <Minic_ast.prog> program
@@ -105,6 +106,7 @@ expression:
 | b=BOOL_CST                      { BCst(b) }
 | SUB e=expression                { UnaryOperator(Minus, e) }
 | ADD e=expression                { e }
+| NOT e=expression                { UnaryOperator(Not, e) }
 | e1=expression ADD e2=expression { BinaryOperator(Add, e1, e2) }
 | e1=expression SUB e2=expression { BinaryOperator(Sub, e1, e2) }
 | e1=expression MUL e2=expression { BinaryOperator(Mult, e1, e2) }
