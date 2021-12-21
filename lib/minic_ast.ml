@@ -6,7 +6,7 @@ type typ =
 
 (* Types des opérations binaires *)
 type binop =
-  | Add | Sub | Mult | Div
+  | Add | Sub | Mult | Div | Mod
   | Eq | Neq | Lt | Leq | Gt | Geq
   | And | Or
   | BAnd | BOr | BXor

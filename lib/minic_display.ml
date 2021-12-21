@@ -19,6 +19,7 @@ let print_program (prog: prog) (out: out_channel) =
     | Sub  -> "-"
     | Mult -> "*"
     | Div  -> "/"
+    | Mod  -> "%"
     | Eq   -> "=="
     | Neq  -> "!="
     | Lt   -> "<"

@@ -19,7 +19,7 @@
 %token RETURN SET SEMI COMMA
 %token IF ELSE WHILE PUTCHAR
 %token INT BOOL VOID
-%token ADD SUB MUL DIV
+%token ADD SUB MUL DIV MOD
 %token EQ NEQ
 %token LT LEQ GT GEQ
 %token AND OR NOT
@@ -36,7 +36,7 @@
 %nonassoc LT LEQ GT GEQ
 %left LSL ASR
 %left SUB ADD
-%left DIV MUL
+%left DIV MUL MOD
 %nonassoc NOT BNOT
 
 %start program
@@ -118,6 +118,7 @@ expression:
 | e1=expression SUB e2=expression  { BinaryOperator(Sub, e1, e2) }
 | e1=expression MUL e2=expression  { BinaryOperator(Mult, e1, e2) }
 | e1=expression DIV e2=expression  { BinaryOperator(Div, e1, e2) }
+| e1=expression MOD e2=expression  { BinaryOperator(Mod, e1, e2) }
 | e1=expression EQ e2=expression   { BinaryOperator(Eq, e1, e2) }
 | e1=expression NEQ e2=expression  { BinaryOperator(Neq, e1, e2) }
 | e1=expression LT e2=expression   { BinaryOperator(Lt, e1, e2) }

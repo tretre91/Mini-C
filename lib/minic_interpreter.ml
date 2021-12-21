@@ -24,6 +24,7 @@ let interpret_program (prog: prog) =
     | Sub  -> v1 - v2
     | Mult -> v1 * v2
     | Div  -> v1 / v2
+    | Mod  -> v1 mod v2
     | Eq   -> int_of_bool (v1 = v2)
     | Neq  -> int_of_bool (v1 <> v2)
     | Lt   -> int_of_bool (v1 < v2)

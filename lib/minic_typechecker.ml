@@ -60,12 +60,12 @@ let typecheck_program (prog: prog) =
         let st1 = string_of_typ t1 in
         let st2 = string_of_typ t2 in
         let op_type, expected = match op with
-        | Add | Sub | Mult | Div -> "an arithmetic", "of type int"
-        | Lt | Leq | Gt | Geq    -> "a comparison", "of type int"
-        | And | Or               -> "a logical", "of type bool"
-        | Eq | Neq               -> "an equality", "of the same type"
-        | BAnd | BOr | BXor      -> "a bitwise", "of type int"
-        | Lsl | Asr              -> "a shift", "of type int"
+        | Add | Sub | Mult | Div | Mod -> "an arithmetic", "of type int"
+        | Lt | Leq | Gt | Geq          -> "a comparison", "of type int"
+        | And | Or                     -> "a logical", "of type bool"
+        | Eq | Neq                     -> "an equality", "of the same type"
+        | BAnd | BOr | BXor            -> "a bitwise", "of type int"
+        | Lsl | Asr                    -> "a shift", "of type int"
         in
         Printf.sprintf "%s operator expects its arguments to be %s, got %s and %s" op_type expected st1 st2
       | Bad_function_arg (f, param, tp, te) ->
@@ -98,7 +98,7 @@ let typecheck_program (prog: prog) =
         let t1 = type_expr e1 in
         let t2 = type_expr e2 in
         begin match op, t1, t2 with
-        | (Add | Sub | Mult | Div | BAnd | BOr | BXor | Lsl | Asr), Int, Int -> Int
+        | (Add | Sub | Mult | Div | Mod | BAnd | BOr | BXor | Lsl | Asr), Int, Int -> Int
         | (Lt | Leq | Gt | Geq), Int, Int -> Bool
         | (And | Or), Bool, Bool -> Bool
         | (Eq | Neq), _, _ when t1 = t2 -> Bool

@@ -75,6 +75,8 @@ rule token = parse
       { MUL }
   | "/"
       { DIV }
+  | "%"
+      { MOD }
   | "<<"
       { LSL }
   | ">>"
