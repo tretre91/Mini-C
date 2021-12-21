@@ -24,6 +24,7 @@
 %token LT LEQ GT GEQ
 %token AND OR NOT
 %token BAND BOR BXOR BNOT
+%token LSL ASR
 %token EOF
 
 %left OR
@@ -33,6 +34,7 @@
 %left BAND
 %left EQ NEQ
 %nonassoc LT LEQ GT GEQ
+%left LSL ASR
 %left SUB ADD
 %left DIV MUL
 %nonassoc NOT BNOT
@@ -127,6 +129,8 @@ expression:
 | e1=expression BAND e2=expression { BinaryOperator(BAnd, e1, e2) }
 | e1=expression BOR e2=expression  { BinaryOperator(BOr, e1, e2) }
 | e1=expression BXOR e2=expression { BinaryOperator(BXor, e1, e2) }
+| e1=expression LSL e2=expression  { BinaryOperator(Lsl, e1, e2) }
+| e1=expression ASR e2=expression  { BinaryOperator(Asr, e1, e2) }
 | id=IDENT                         { Get(id) }
 | f=IDENT LPAR a=separated_list(COMMA, expression) RPAR { Call(f, a) }
 ;

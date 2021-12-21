@@ -1,3 +1,9 @@
+**binary.mnc**
+100000000
+110110111001100001
+
+returned value: 0
+
 **fact.mnc**
 x
 returned value: 0

@@ -35,6 +35,8 @@ let interpret_program (prog: prog) =
     | BAnd -> v1 land v2
     | BOr  -> v1 lor v2
     | BXor -> v1 lxor v2
+    | Lsl  -> v1 lsl v2
+    | Asr  -> v1 asr v2
   in
 
   let rec eval_expr = function

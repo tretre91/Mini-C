@@ -10,6 +10,7 @@ type binop =
   | Eq | Neq | Lt | Leq | Gt | Geq
   | And | Or
   | BAnd | BOr | BXor
+  | Lsl | Asr
 
 (* Types des opérations unaires *)
 type unop =

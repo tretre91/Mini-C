@@ -53,19 +53,21 @@ let typecheck_program (prog: prog) =
         let st = string_of_typ t in
         begin match op with
         | Minus -> "unary minus expects an integer expression, got " ^ st
-        | Not -> "boolean not excpects an expression of type bool, got " ^ st
-        | BNot -> "bitwise not expects an integer, got " ^ st
+        | Not   -> "boolean not excpects an expression of type bool, got " ^ st
+        | BNot  -> "bitwise not expects an integer, got " ^ st
         end
       | Binary_operator_mismatch (op, t1, t2) ->
         let st1 = string_of_typ t1 in
         let st2 = string_of_typ t2 in
-        Printf.sprintf (match op with
-        | Add | Sub | Mult | Div -> "an arithmetic operator expects both its arguments to be of type int, got %s and %s instead"
-        | Lt | Leq | Gt | Geq -> "a comparison operator expects both its arguments to be of type int, got %s and %s instead"
-        | And | Or -> "a logical operator expects both its arguments to be of type bool, got %s and %s instead"
-        | Eq | Neq -> "an equality operator expects both its argument to be of the same type, got %s and %s"
-        | BAnd | BOr | BXor -> "a bitwise operator expects both its arguments to be of type int, got %s and %s"
-        ) st1 st2
+        let op_type, expected = match op with
+        | Add | Sub | Mult | Div -> "an arithmetic", "of type int"
+        | Lt | Leq | Gt | Geq    -> "a comparison", "of type int"
+        | And | Or               -> "a logical", "of type bool"
+        | Eq | Neq               -> "an equality", "of the same type"
+        | BAnd | BOr | BXor      -> "a bitwise", "of type int"
+        | Lsl | Asr              -> "a shift", "of type int"
+        in
+        Printf.sprintf "%s operator expects its arguments to be %s, got %s and %s" op_type expected st1 st2
       | Bad_function_arg (f, param, tp, te) ->
         let stp = string_of_typ tp in
         let ste = string_of_typ te in
@@ -96,7 +98,7 @@ let typecheck_program (prog: prog) =
         let t1 = type_expr e1 in
         let t2 = type_expr e2 in
         begin match op, t1, t2 with
-        | (Add | Sub | Mult | Div | BAnd | BOr | BXor), Int, Int -> Int
+        | (Add | Sub | Mult | Div | BAnd | BOr | BXor | Lsl | Asr), Int, Int -> Int
         | (Lt | Leq | Gt | Geq), Int, Int -> Bool
         | (And | Or), Bool, Bool -> Bool
         | (Eq | Neq), _, _ when t1 = t2 -> Bool

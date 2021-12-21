@@ -75,6 +75,10 @@ rule token = parse
       { MUL }
   | "/"
       { DIV }
+  | "<<"
+      { LSL }
+  | ">>"
+      { ASR }
   | "=="
       { EQ }
   | "!="

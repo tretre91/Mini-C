@@ -79,6 +79,9 @@ Une expression peut être sous une des formes suivantes :
 | et                            | `1 + 2 & 3`               |
 | ou                            | `64 | 63`                 |
 | ou exclusif                   | `127 ^ 255`               |
+| **Décalages**                 |                           |
+| vers la gauche (logique)      | `1 << 64`                 |
+| vers la droite (arithmétique) | `64 >> 2`                 |
 | **Autres**                    |                           |
 | variable                      | `x`                       |
 | appel de fonction             | `foo(5, false)`           |

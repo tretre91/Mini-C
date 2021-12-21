@@ -30,6 +30,8 @@ let print_program (prog: prog) (out: out_channel) =
     | BAnd -> "&"
     | BOr  -> "|"
     | BXor -> "^"
+    | Lsl  -> "<<"
+    | Asr  -> ">>"
   in
 
   let rec string_of_expr (e: expr) =
