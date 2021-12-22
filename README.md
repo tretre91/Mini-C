@@ -4,23 +4,23 @@ Projet pour le cours de compilation.
 
 ---
 
-- [Syntaxe du langage](#syntaxe-du-langage)
-  + [Commentaires](#commentaires)
-  + [Types](#types)
-  + [Variables globales](#variables-globales)
-  + [Variables locales](#variables-locales)
-  + [Fonctions](#fonctions)
-  + [Blocs](#blocs)
-  + [Instructions](#instructions)
-  + [Expressions](#expressions)
-- [Fonctionnalités supplémentaires](#fonctionnalités-supplémentaires)
-  + [Interpréteur](#interpr-teur)
-  + [Afficheur](#afficheur)
-- [Tests](#tests)
+- [Mini-C](#mini-c)
+  - [Syntaxe du langage](#syntaxe-du-langage)
+    - [Commentaires](#commentaires)
+    - [Types](#types)
+    - [Variables](#variables)
+    - [Fonctions](#fonctions)
+    - [Blocs](#blocs)
+    - [Instructions](#instructions)
+    - [Expressions](#expressions)
+  - [Fonctionnalités supplémentaires](#fonctionnalités-supplémentaires)
+    - [Interpréteur](#interpréteur)
+    - [Afficheur](#afficheur)
+  - [Tests](#tests)
 
 ## Syntaxe du langage
 
-Un programme Mini-C est composé de déclarations de variables globales et de déclarations de fonctions (sans ordre spécifique),l'éxécution commence à la fonction main.
+Un programme Mini-C est composé de déclarations de variables globales et de déclarations de fonctions (sans ordre spécifique), l'exécution commence à la fonction main.
 
 ### Commentaires
 
@@ -37,11 +37,17 @@ Les commentaires simples (`// ...`) et multilignes (`/* ... */`) sont supportés
 
 Les types disponibles sont `int`, `bool` et `void` (seulement pour les fonctions).
 
-### Variables globales
+### Variables
 
-Les variables globales sont définies n'importe où en dehors d'une fonction, elles sont accessibles partout dans le programme après leur définition.
+Une déclaration de variables peut être de l'une des formes suivantes :
 
-### Variables locales
+```c
+int a;               // a aura une valeur par défaut
+bool b = true;
+int a = 1, b, c = 2; // déclare 3 variables de type int, b aura une valeur par défaut
+```
+
+Les variables globales sont définies n'importe où en dehors d'une fonction, elles sont accessibles partout dans le programme après leur déclaration.
 
 Les variables locales sont visibles dans le bloc de code où elles sont déclarées, les variables sont uniques dans leur bloc, mais peuvent être redéfinies dans des blocs sous-jacents:
 
@@ -75,13 +81,13 @@ void bar() {
 }
 ```
 
-Une fonction dont le type n'est pas void doit forcèment renvoyer une valeur
+Une fonction dont le type n'est pas void doit forcement renvoyer une valeur.
 
 ### Blocs
 
-Un bloc de code est délimité par des accollades, il peut contenir des déclarations de variable, des instructions ou d'autres blocs de code.
+Un bloc de code est délimité par des accolades, il peut contenir des déclarations de variable, des instructions ou d'autres blocs de code.
 
-Une variable déclarée dans un bloc est visible (et peut être redéfinie) dans tous ses blocs fils, en revanche elle n'est pas accessible dans son bloc père
+Une variable déclarée dans un bloc est visible (et peut être redéfinie) dans tous ses blocs fils, en revanche elle n'est pas accessible dans son bloc père :
 
 ```c
 void foo(bool b) {
@@ -111,7 +117,7 @@ Les instructions supportées sont :
 | `while (cond) {...}`          | Boucle while                                  |
 | `for (init; cond; incr) {...}`| Boucle for                                    |
 | `return e;`                   | Renvoie la valeur de l'expression e           |
-| `e;`                          | Evalue l'expression e                         |
+| `e;`                          | Évalue l'expression e                         |
 
 ### Expressions
 
@@ -173,7 +179,7 @@ minic prog.mnc -disp code.out
 ```
 ## Tests
 
-Les tests du vérificataur de type, de l'interprèteur et de l'afficheur sont dans les sous dossiers typechecker, interpreter et display du dossier test.
+Les tests du vérificateur de type, de l'interpréteur et de l'afficheur sont dans les sous dossiers typechecker, interpreter et display du dossier test.
 - Le dossier test/typechecker contient un fichier de test par aspect du langage traité, par ordre chronologique
-- Pour tester l'afficheur on vérifie qu'un programme de base et le même programme reconstruit à partir de son ast produise les mêmes résultats à l'interprètation
-- Pour tester l'interprèteur on interprète plusieurs fichiers et on compare leur sortie et leur code de retour avec le contenu du fichier interpreter.expected
+- Pour tester l'afficheur on vérifie qu'un programme de base et le même programme reconstruit à partir de son ast produise les mêmes résultats à l'interpretation
+- Pour tester l'interpréteur on interprète plusieurs fichiers et on compare leur sortie et leur code de retour avec le contenu du fichier interpreter.expected
