@@ -158,85 +158,62 @@ let typecheck_program (prog: prog) =
     | e -> error Global e
   in
 
-  (* Vérification du bon typage d'une fonction. *)
+
   let typecheck_function (fdef: fun_def) =
-    (* L'environnement local contient les types de toutes les variables de la
-       fonction (globales, paramètres et locales).
-       Si plusieurs variables ont le même nom alors l'ordre de priorité est
-          locale > paramètre > globale *)
-    let local_env =
-      let param_env =
-        List.fold_left (fun env (x, ty) -> 
-          if ty = Void then
-            raise (Void_variable x)
-          else
-            Env.add x ty env
-        ) global_env fdef.params
-      in
-      typecheck_declaration_list fdef.locals param_env
-    in
-
-    (* A partir d'ici l'environnement n'est plus modifié, on redéfinit donc
-       les fonctions auxiliaires qui prennent en argument un environnement *)
-
-    (* Calcul du type d'une expression dans l'environnement local. *)
-    let type_expr = type_expr local_env in
-
-    (* Vérification du bon typage d'une instruction ou d'une séquence.
-       Toujours local. *)
-    let rec typecheck_instr = function
+    let returns = ref false in
+    (* Vérification du bon typage des instructions d'un bloc *)
+    let rec typecheck_block env b =
+      let local_env = typecheck_declaration_list b.locals env in
+      typecheck_seq local_env b.code
+    and typecheck_instr env = function
       | Putchar(e) ->
-          if type_expr e <> Int then
+          if type_expr env e <> Int then
             failwith "putchar expects an integer (ascii code) argument"
       | Set(x, e) ->
-        let t_e = type_expr e in
-        let t_var = match Env.find_opt x local_env with
+        let t_e = type_expr env e in
+        let t_var = match Env.find_opt x env with
           | Some t -> t
-          | None ->raise (Undefined_variable x)
+          | None -> raise (Undefined_variable x)
         in
         if t_var <> t_e then
           raise (Bad_assignement (t_var, x, t_e))
       | If(cond, t, f) ->
-          let t_c = type_expr cond in
+          let t_c = type_expr env cond in
           if t_c <> Bool then
             raise (Bad_condition ("an if", t_c))
           else begin
-            typecheck_seq t;
-            typecheck_seq f
+            typecheck_block env t;
+            typecheck_block env f
           end
-      | While(cond, s) ->
-        let t_c = type_expr cond in
+      | While(cond, b) ->
+        let t_c = type_expr env cond in
         if t_c <> Bool then
           raise (Bad_condition ("a while loop", t_c))
         else
-          typecheck_seq s
+          typecheck_block env b
       | Return(e) ->
-        let t = type_expr e in
+        let t = type_expr env e in
         begin match fdef.return, t with
         | Void, _ -> failwith "cannot return a value from a void function"
         | t1, t2 when t1 <> t2 -> raise (Return_value_mismatch (t1, t2))
-        | _, _ -> ()
+        | _, _ -> returns := true
         end
-      | Expr(e) -> ignore (type_expr e)
-    and typecheck_seq s =
-        List.iter typecheck_instr s
+      | Expr(e) -> ignore (type_expr env e)
+      | Block(b) -> typecheck_block env b
+    and typecheck_seq env s =
+        List.iter (typecheck_instr env) s
     in
-
-    (* Indique si la fonction contient au moins une instruction return *)
-    let rec returns = function
-      | [] -> false
-      | e :: tl -> match e with
-        | Return _ -> true
-        | If(_, t, f) -> returns t || returns f || returns tl
-        | While(_, s) -> returns s || returns tl
-        | _ -> returns tl
-    in
-
-    (* Code principal du typage d'une fonction : on type ses instructions. *)
-    typecheck_seq (fdef.code);
     
-    (* On vérifie que la fonction renvoie bien une valeur *)
-    if fdef.return <> Void && not (returns fdef.code) then
+    let param_env =
+      List.fold_left (fun env (x, ty) -> 
+        if ty = Void then
+          raise (Void_variable x)
+        else
+          Env.add x ty env
+      ) global_env fdef.params
+    in
+    typecheck_block param_env fdef.body;
+    if fdef.return <> Void && not !returns then
       failwith "a non void function should return a value"
   in
 
@@ -268,6 +245,15 @@ let strict_check (prog: prog) =
     aux "" (List.sort (fun (x, _, _) (y, _, _) -> compare x y) vars)
   in
 
+  let check_function (fdef: fun_def) =
+    let rec check_local_redefintions (b: block) =
+      check_redefinition b.locals;
+      List.iter (function Block b -> check_local_redefintions b | _ -> ()) b.code
+    in
+    check_redefinition (List.map (fun (s, t) -> s, t, ()) fdef.params);
+    check_local_redefintions fdef.body
+  in
+
   let check_global_expression vars =
     let rec check_expr = function
     | Cst _ | BCst _ | Get _ -> ()
@@ -283,4 +269,4 @@ let strict_check (prog: prog) =
 
   check_redefinition prog.globals;
   check_global_expression prog.globals;
-  List.iter check_redefinition (List.map (fun fdef -> fdef.locals) prog.functions)
+  List.iter check_function prog.functions

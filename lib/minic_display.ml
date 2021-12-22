@@ -35,8 +35,7 @@ let print_program (prog: prog) (out: out_channel) =
     | Asr  -> ">>"
   in
 
-  let rec string_of_expr (e: expr) =
-    match e with
+  let rec string_of_expr = function
     | Cst n -> string_of_int n
     | BCst b -> string_of_bool b
     | UnaryOperator(op, e) ->
@@ -51,42 +50,61 @@ let print_program (prog: prog) (out: out_channel) =
     | Call (f, args) -> sprintf "%s(%s)" f (String.concat ", " (List.map string_of_expr args))
   in
 
-  let rec print_instr (indent: string) (i: instr) =
-    output_string out indent; 
+  let print_declaration_list (spaces: int) (decl: (string * typ * expr) list) =
+    let indent = String.make spaces ' ' in
+    let print_declaration (x, t, e) =
+      let typ = string_of_typ t in
+      let expr = string_of_expr e in
+      fprintf out "%s%s %s = %s;\n" indent typ x expr
+    in
+    List.iter print_declaration decl
+  in
+
+  (* Affiche une instruction avec le bon niveau d'indentation *)
+  let rec print_instr (spaces: int) (i: instr) =
     match i with
-    | Putchar e -> fprintf out "putchar(%s);" (string_of_expr e)
-    | Set(x, e) -> fprintf out "%s = %s;" x (string_of_expr e)
-    | If(e, s1, s2) ->
-      fprintf out "if (%s) {\n" (string_of_expr e);
-      print_seq (indent ^ "  ") s1;
-      fprintf out "%s} else {\n" indent;
-      print_seq (indent ^ "  ") s2;
-      fprintf out "%s}" indent
-    | While(e, s) ->
-      fprintf out "while (%s) {\n" (string_of_expr e);
-      print_seq (indent ^ "  ") s;
-      fprintf out "%s}" indent
-    | Return e -> fprintf out "return %s;" (string_of_expr e)
-    | Expr e -> fprintf out "%s;" (string_of_expr e)
-  and print_seq (indent: string) (s: seq) =
-    List.iter (fun i -> print_instr indent i; output_char out '\n') s
+    | Putchar e ->
+      fprintf out "putchar(%s);" (string_of_expr e)
+    | Set(x, e) ->
+      fprintf out "%s = %s;" x (string_of_expr e)
+    | If(e, t, f) ->
+      fprintf out "if (%s) " (string_of_expr e);
+      print_block (spaces + 2) t;
+      fprintf out " else ";
+      print_block (spaces + 2) f
+    | While(e, b) ->
+      fprintf out "while (%s) " (string_of_expr e);
+      print_block (spaces + 2) b
+    | Return e ->
+      fprintf out "return %s;" (string_of_expr e)
+    | Expr e ->
+      fprintf out "%s;" (string_of_expr e)
+    | Block b ->
+      print_block (spaces + 2) b
+  (* Affiche un bloc de code *)
+  and print_block (spaces: int) (b: block) =
+    let indent = String.make (spaces - 2) ' ' in
+    fprintf out "{\n";
+    print_declaration_list spaces b.locals;
+    print_seq spaces b.code;
+    fprintf out "%s}" indent
+  (* Affiche une séquence d'instructions toutes au même niveau d'indentation *)
+  and print_seq (spaces: int) (s: seq) =
+    let indent = String.make spaces ' ' in
+    List.iter (fun i -> output_string out indent; print_instr spaces i; output_char out '\n') s
   in
 
-  let print_declaration_list (indent: string) (decl: (string * typ * expr) list) =
-    List.iter (fun (x, t, e) -> fprintf out "%s%s %s = %s;\n" indent (string_of_typ t) x (string_of_expr e)) decl
-  in
-
+  (* Affiche une fonction *)
   let print_fun_def (fdef: fun_def) =
     let params =
       String.concat ", " (List.map (fun (x, t) -> sprintf "%s %s" (string_of_typ t) x) fdef.params)
     in
-    fprintf out "%s %s(%s) {\n" (string_of_typ fdef.return) fdef.name params;
-    print_declaration_list "  " fdef.locals;
-    print_seq "  " fdef.code;
-    fprintf out "}\n\n";
+    fprintf out "%s %s(%s) " (string_of_typ fdef.return) fdef.name params;
+    print_block 2 fdef.body;
+    output_string out "\n\n"
   in
 
-  print_declaration_list "" prog.globals;
+  print_declaration_list 0 prog.globals;
   if prog.globals <> [] then
-    fprintf out "\n";
+    output_char out '\n';
   List.iter print_fun_def prog.functions

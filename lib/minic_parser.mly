@@ -84,8 +84,8 @@ typ:
 
 (* Déclaration de fonction. *)
 function_decl:
-| t=typ f=IDENT LPAR p=separated_list(COMMA, parameter) RPAR BEGIN l=list(variable_decl) s=list(instruction) END
-    { { name=f; code=s; params=p; return=t; locals=l } }
+| t=typ f=IDENT LPAR p=separated_list(COMMA, parameter) RPAR b=block
+    { { name=f; params=p; return=t; body=b } }
 ;
 
 (* Paramètre formel d'une fonction *)
@@ -93,16 +93,21 @@ parameter:
 | t=typ id=IDENT { id, t }
 ;
 
+(* Bloc d'instructions *)
+block:
+| BEGIN l=list(variable_decl) s=list(instruction) END
+    { { locals = l; code = s } }
+;
+
 (* Instructions. *)
 instruction:
-| PUTCHAR LPAR e=expression RPAR SEMI  { Putchar(e) }
-| id=IDENT SET e=expression SEMI       { Set(id, e) }
-| IF LPAR c=expression RPAR BEGIN t=list(instruction) END ELSE BEGIN f=list(instruction) END
-                                       { If(c, t, f) }
-| WHILE LPAR c=expression RPAR BEGIN s=list(instruction) END
-                                       { While(c, s) }
-| RETURN e=expression SEMI             { Return(e) }
-| e=expression SEMI                    { Expr(e) }
+| PUTCHAR LPAR e=expression RPAR SEMI            { Putchar(e) }
+| id=IDENT SET e=expression SEMI                 { Set(id, e) }
+| IF LPAR c=expression RPAR t=block ELSE f=block { If(c, t, f) }
+| WHILE LPAR c=expression RPAR b=block           { While(c, b) }
+| RETURN e=expression SEMI                       { Return(e) }
+| e=expression SEMI                              { Expr(e) }
+| b=block                                        { Block(b) }
 ;
 
 (* Expressions. *)

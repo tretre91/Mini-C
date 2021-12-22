@@ -4,21 +4,28 @@ open Minic_ast
 exception Ret of int
 
 let interpret_program (prog: prog) =
-  (* Table de hachage contenant toutes les variables, elle évolue au cours de
+  (* Table de hachage contenant toutes les variables du programme, elle évolue au cours de
      l'execution *)
   let env = Hashtbl.create 256 in
+
+  (* Pile contenant les noms des variables introduites lors d'un appel de fonction
+    ou à l'entrée dans un bloc de code, les variables au sommet sont celles
+    qu'il faudra supprimer en sortant du bloc en cours d'éxécution *)
+  let variables = Stack.create () in
   
   let int_of_bool b = if b then 1 else 0 in
   let bool_of_int i = i <> 0 in
 
-  let apply_unop (op: unop) (v: int) =
+  (* Applique une opération unaire *)
+  let apply_unop (op: unop) (v: int): int =
     match op with
     | Minus -> -v
     | Not -> int_of_bool (not (bool_of_int v))
     | BNot -> lnot v
   in
 
-  let apply_binop (op: binop) (v1: int) (v2: int) =
+  (* Applique une opération binaire *)
+  let apply_binop (op: binop) (v1: int) (v2: int): int =
     match op with
     | Add  -> v1 + v2
     | Sub  -> v1 - v2
@@ -40,7 +47,20 @@ let interpret_program (prog: prog) =
     | Asr  -> v1 asr v2
   in
 
-  let rec eval_expr = function
+  (* Ajoute une liste de variables à l'environnement et stocke leur noms au sommet de la pile *)
+  let rec push_vars (vars: (string * expr) list): unit =
+    let add_var (vars: string list) ((x, e): string * expr): string list =
+      Hashtbl.add env x (eval_expr e);
+      x :: vars
+    in
+    let vars = List.fold_left add_var [] vars in
+    Stack.push vars variables
+  (* Supprime de l'environnement les variables du sommet de la pile *)
+  and pop_vars () =
+    let vars = Stack.pop variables in
+    List.iter (Hashtbl.remove env) vars
+  (* Fonction d'évaluation d'une expression *)
+  and eval_expr = function
     | Cst n -> n
     | BCst b -> int_of_bool b
     | UnaryOperator(op, e) ->
@@ -53,28 +73,32 @@ let interpret_program (prog: prog) =
     | Get x -> Hashtbl.find env x
     | Call(name, args) ->
       let fn = List.find (fun fdef -> fdef.name = name) prog.functions in
-      let args' = List.map eval_expr args in
-      eval_function fn args'
-  and eval_function (fdef: fun_def) (args: int list): int =
-    let add_var vars x v =
-      Hashtbl.add env x v;
-      x :: vars
-    in
-    let local_vars =
-      let params = List.fold_left2 (fun vars (x, _) n -> add_var vars x n) [] fdef.params args in
-      List.fold_left (fun vars (x, _, e) -> add_var vars x (eval_expr e)) params fdef.locals
-    in
-    let retval =
+      eval_function fn args
+  (* Fonction d'évaluation d'un appel de fonction *)
+  and eval_function (fdef: fun_def) (args: expr list): int =
+    let params = List.map2 (fun (x, _) v -> x, v) fdef.params args in
+    push_vars params;
+    let return_value = 
       try
-        eval_seq fdef.code;
+        eval_block fdef.body;
         0
       with
       | Ret n -> n
     in
-    List.iter (Hashtbl.remove env) local_vars;
-    retval
+    pop_vars ();
+    return_value
+  (* Fonction d'évaluation d'une séquence d'instructions *)
   and eval_seq (instructions: seq): unit =
     List.iter eval_instr instructions
+  (* Fonction d'évaluation d'un bloc de code *)
+  and eval_block (b: block): unit =
+    push_vars (List.map (fun (x, _, e) -> x, e) b.locals);
+    try
+      eval_seq b.code;
+      pop_vars ()
+    with
+    | Ret n -> pop_vars (); raise (Ret n)
+  (* Fonction d'évaluation d'une instruction *)
   and eval_instr (i: instr): unit = match i with
     | Putchar e -> 
       let n = eval_expr e in
@@ -83,18 +107,20 @@ let interpret_program (prog: prog) =
       Hashtbl.replace env x (eval_expr e)
     | If(e, t, f) ->
       if eval_expr e = 1 then
-        eval_seq t
+        eval_block t
       else
-        eval_seq f
+        eval_block f
     | While(e, s) ->
       if eval_expr e = 1 then begin
-        eval_seq s;
+        eval_block s;
         eval_instr i
       end
     | Return e ->
       raise (Ret (eval_expr e))
     | Expr e ->
       ignore (eval_expr e)
+    | Block b ->
+      eval_block b
   in
   
   (* On execute la fonction main si elle existe *)
