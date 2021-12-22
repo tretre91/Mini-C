@@ -145,7 +145,7 @@ Une expression peut être sous une des formes suivantes :
 | **Opérations bit-à-bit**      |                           |
 | négation                      | `~1`                      |
 | et                            | `1 + 2 & 3`               |
-| ou                            | `64 | 63`                 |
+| ou                            | `64 \| 63`                |
 | ou exclusif                   | `127 ^ 255`               |
 | **Décalages**                 |                           |
 | vers la gauche (logique)      | `1 << 64`                 |
@@ -183,3 +183,11 @@ Les tests du vérificateur de type, de l'interpréteur et de l'afficheur sont da
 - Le dossier test/typechecker contient un fichier de test par aspect du langage traité, par ordre chronologique
 - Pour tester l'afficheur on vérifie qu'un programme de base et le même programme reconstruit à partir de son ast produise les mêmes résultats à l'interpretation
 - Pour tester l'interpréteur on interprète plusieurs fichiers et on compare leur sortie et leur code de retour avec le contenu du fichier interpreter.expected
+
+Les tests de l'afficheur et de l'interpréteur sont lancés lorsque le projet est compilé, ils n'affichent rien si il  n'y a pas d'erreur.
+
+Les test du vérificateur de type peuvent être lancés avec la commande
+
+```
+dune runtest
+```
