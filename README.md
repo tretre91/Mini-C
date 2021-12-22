@@ -186,7 +186,7 @@ Les tests du vérificateur de type, de l'interpréteur et de l'afficheur sont da
 
 Les tests de l'afficheur et de l'interpréteur sont lancés lorsque le projet est compilé, ils n'affichent rien si il  n'y a pas d'erreur.
 
-Les test du vérificateur de type peuvent être lancés avec la commande
+Les tests du vérificateur de type peuvent être lancés avec la commande
 
 ```
 dune runtest
