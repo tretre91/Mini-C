@@ -1,12 +1,16 @@
 open Minic_ast
 
-(* Exception utilisée pour sortir de l'évaluation d'une séquence d'instructions *)
+(** Exception utilisée pour sortir de l'évaluation d'une séquence d'instructions *)
 exception Ret of int
 
+(** Interprète un programme, prog est supposé avoir passé la vérification de types *)
 let interpret_program (prog: prog) =
   (* Table de hachage contenant toutes les variables du programme, elle évolue au cours de
      l'execution *)
   let env = Hashtbl.create 256 in
+
+  (* Table de hachage contenant toutes les fonctions du programme *)
+  let fenv = Hashtbl.create 128 in
 
   (* Pile contenant les noms des variables introduites lors d'un appel de fonction
     ou à l'entrée dans un bloc de code, les variables au sommet sont celles
@@ -47,18 +51,19 @@ let interpret_program (prog: prog) =
     | Asr  -> v1 asr v2
   in
 
-  (* Ajoute une liste de variables à l'environnement et stocke leur noms au sommet de la pile *)
-  let rec push_vars (vars: (string * expr) list): unit =
-    let add_var (vars: string list) ((x, e): string * expr): string list =
-      Hashtbl.add env x (eval_expr e);
-      x :: vars
-    in
-    let vars = List.fold_left add_var [] vars in
-    Stack.push vars variables
-  (* Supprime de l'environnement les variables du sommet de la pile *)
+  (* Ajoute une variables à l'environnement et stocke son nom au sommet de la pile *)
+  let rec add_var x e =
+    let l = Stack.top variables in
+    l := x :: !l;
+    Hashtbl.add env x (eval_expr e)
+  (* Sauvegarde les variables du sommet de la pile *)
+  and push_vars () =
+    Stack.push (ref []) variables
+  (* Supprime de l'environnement les variables du sommet de la pile et restaure
+     les variables précédentes *)
   and pop_vars () =
     let vars = Stack.pop variables in
-    List.iter (Hashtbl.remove env) vars
+    List.iter (Hashtbl.remove env) !vars
   (* Fonction d'évaluation d'une expression *)
   and eval_expr = function
     | Cst n -> n
@@ -72,12 +77,12 @@ let interpret_program (prog: prog) =
       apply_binop op v1 v2
     | Get x -> Hashtbl.find env x
     | Call(name, args) ->
-      let fn = List.find (fun fdef -> fdef.name = name) prog.functions in
+      let fn = Hashtbl.find fenv name in
       eval_function fn args
   (* Fonction d'évaluation d'un appel de fonction *)
   and eval_function (fdef: fun_def) (args: expr list): int =
-    let params = List.map2 (fun (x, _) v -> x, v) fdef.params args in
-    push_vars params;
+    push_vars ();
+    List.iter2 (fun (x, _) e -> add_var x e) fdef.params args;
     let return_value = 
       try
         eval_block fdef.body;
@@ -87,14 +92,11 @@ let interpret_program (prog: prog) =
     in
     pop_vars ();
     return_value
-  (* Fonction d'évaluation d'une séquence d'instructions *)
-  and eval_seq (instructions: seq): unit =
-    List.iter eval_instr instructions
   (* Fonction d'évaluation d'un bloc de code *)
   and eval_block (b: block): unit =
-    push_vars (List.map (fun (x, _, e) -> x, e) b.locals);
+    push_vars ();
     try
-      eval_seq b.code;
+      List.iter eval_instr b;
       pop_vars ()
     with
     | Ret n -> pop_vars (); raise (Ret n)
@@ -103,6 +105,8 @@ let interpret_program (prog: prog) =
     | Putchar e -> 
       let n = eval_expr e in
       print_char (Char.chr n)
+    | Decl d ->
+      List.iter (fun (x, _, e) -> add_var x e) d
     | Set(x, e) ->
       Hashtbl.replace env x (eval_expr e)
     | If(e, t, f) ->
@@ -123,10 +127,21 @@ let interpret_program (prog: prog) =
       eval_block b
   in
   
-  (* On execute la fonction main si elle existe *)
-  match List.find_opt (fun fdef -> fdef.name = "main") prog.functions with
-  | None ->
-    print_endline "No main function"; 0
-  | Some f ->
-    List.iter (fun (x, _, e) -> Hashtbl.add env x (eval_expr e)) prog.globals;
-    eval_function f []
+  (* On cherche la fonction main tout en ajoutant les variables globales et les
+     autres fonctions à leurs environnements *)
+  let rec exec prog =
+    match prog with
+    | [] ->
+      print_endline "no main function!";
+      0
+    | Variable(x, _, e) :: tl -> add_var x e; exec tl
+    | (Function f) :: tl ->
+        if f.name = "main" then
+          eval_function f []
+        else begin
+          Hashtbl.add fenv f.name f;
+          exec tl
+        end
+  in
+  push_vars ();
+  exec prog

@@ -5,7 +5,6 @@ type args = {
   interpret: bool;
   display: bool;
   display_file: string option;
-  strict: bool;
 }
     
 let parse_args () =
@@ -14,7 +13,6 @@ let parse_args () =
   let interpret = ref false in
   let display = ref false in
   let display_file = ref None in
-  let strict = ref true in
 
   let handle_display () =
     display := true;
@@ -28,8 +26,7 @@ let parse_args () =
 
   let speclist =
     [("-i", Arg.Set interpret, " Interpret the program");
-     ("-lax", Arg.Clear strict, " Allow redefinition of variables and function calls in a global variable's initialization");
-     ("-d", Arg.Unit handle_display, " Output the source code derived from the AST, the code is displayed on stdout if no argument is given")]
+     ("-disp", Arg.Unit handle_display, " Output the source code derived from the AST, the code is displayed on stdout if no argument is given")]
   in
   Arg.parse (Arg.align speclist) (fun f -> if !input_file = "" then input_file := f) usage;
   {
@@ -37,12 +34,9 @@ let parse_args () =
     interpret = !interpret;
     display = !display;
     display_file = !display_file;
-    strict = !strict;
   }
 
 let typecheck ast args =
-  if args.strict then
-    Minic_typechecker.strict_check ast;
   Minic_typechecker.typecheck_program ast;
   Printf.printf "Successfully checked program %s\n" args.input_file
 

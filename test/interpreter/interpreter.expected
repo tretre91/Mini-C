@@ -137,6 +137,42 @@ returned value: 0
 
 returned value: 0
 
+**for2.mnc**
+0 9
+1 8
+2 7
+3 6
+4 5
+5 4
+6 3
+7 2
+8 1
+9 0
+
+0 9
+1 8
+2 7
+3 6
+4 5
+5 4
+6 3
+7 2
+8 1
+9 0
+
+0 9
+1 8
+2 7
+3 6
+4 5
+5 4
+6 3
+7 2
+8 1
+9 0
+
+returned value: 0
+
 **halfabet.mnc**
 acegikmoqsuwy
 returned value: 0

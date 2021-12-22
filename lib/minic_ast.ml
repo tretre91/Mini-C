@@ -1,10 +1,10 @@
-(* Représentation des types. *)
+(** Représentation des types. *)
 type typ =
   | Int
   | Bool
   | Void
 
-(* Types des opérations binaires *)
+(** Types des opérations binaires *)
 type binop =
   | Add | Sub | Mult | Div | Mod
   | Eq | Neq | Lt | Leq | Gt | Geq
@@ -12,13 +12,13 @@ type binop =
   | BAnd | BOr | BXor
   | Lsl | Asr
 
-(* Types des opérations unaires *)
+(** Types des opérations unaires *)
 type unop =
   | Minus
   | Not
   | BNot
 
-(* Représentation des expressions. *)
+(** Représentation des expressions. *)
 type expr =
   | Cst of int
   | BCst of bool
@@ -27,25 +27,23 @@ type expr =
   | Get of string
   | Call of string * expr list
 
-(* Type d'une déclaration de variable *)
+(** Type d'une déclaration de variable *)
 type var_decl = string * typ * expr
 
-(* Représentation des instructions et séquences. *)
+(** Représentation des instructions. *)
 type instr =
   | Putchar of expr
+  | Decl of var_decl list
   | Set of string * expr
   | If of expr * block * block
   | While of expr * block
   | Return of expr
   | Expr of expr
   | Block of block
-and seq = instr list
-and block = {
-  locals: var_decl list;
-  code: seq
-}
+(** Type des blocs de code *)
+and block = instr list
 
-(* Représentation des fonctions. *)
+(** Représentation des fonctions. *)
 type fun_def = {
   name: string;
   params: (string * typ) list;
@@ -53,11 +51,12 @@ type fun_def = {
   body: block;
 }
 
-(* Représentation des programmes.
-   On associe une expression à chaque variable globale, cette expression
-   ne peut pas contenir d'appel de fonction ou de références à des variables
-   définies après la variable à laquelle elle est associée *)
-type prog = {
-  globals: var_decl list;
-  functions: fun_def list;
-}
+(** Type d'un déclaration dans la portée globale (une déclaration de variable
+    globale ou de fonction)*)
+type global_decl =
+  | Variable of var_decl
+  | Function of fun_def
+
+(** Représentation des programmes.
+    Un programme est simplement une suite de déclarations de variables ou de fonctions. *)
+type prog = global_decl list

@@ -5,7 +5,6 @@ let interpret_file file display =
   let lexbuf = Lexing.from_channel in_channel in
   let ast = Minic_parser.program Minic_lexer.token lexbuf in
   close_in in_channel;
-  Minic_typechecker.strict_check ast;
   Minic_typechecker.typecheck_program ast;
   let retval = Minic_interpreter.interpret_program ast in
   Printf.printf "\nreturned value: %d\n\n" retval;

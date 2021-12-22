@@ -2,9 +2,25 @@
 
 Projet pour le cours de compilation.
 
+---
+
+- [Syntaxe du langage](#syntaxe-du-langage)
+  + [Commentaires](#commentaires)
+  + [Types](#types)
+  + [Variables globales](#variables-globales)
+  + [Variables locales](#variables-locales)
+  + [Fonctions](#fonctions)
+  + [Blocs](#blocs)
+  + [Instructions](#instructions)
+  + [Expressions](#expressions)
+- [Fonctionnalités supplémentaires](#fonctionnalités-supplémentaires)
+  + [Interpréteur](#interpr-teur)
+  + [Afficheur](#afficheur)
+- [Tests](#tests)
+
 ## Syntaxe du langage
 
-Un programme Mini-C est composé d'une suite de déclaration de variables globales suivie de déclarations de fonctions
+Un programme Mini-C est composé de déclarations de variables globales et de déclarations de fonctions (sans ordre spécifique),l'éxécution commence à la fonction main.
 
 ### Commentaires
 
@@ -23,43 +39,62 @@ Les types disponibles sont `int`, `bool` et `void` (seulement pour les fonctions
 
 ### Variables globales
 
-Les variables globales sont définies au début du fichier et ne peuvent pas être initialisées avec le résultat d'un appel de fonction (voir [plus bas](#vérifications-supplémentaires)), elles sont accessibles n'importe où dans le programme.
+Les variables globales sont définies n'importe où en dehors d'une fonction, elles sont accessibles partout dans le programme après leur définition.
 
 ### Variables locales
 
-Les variables locales sont les paramètres de fonction et les variables déclarées au début d'un bloc de code :
+Les variables locales sont visibles dans le bloc de code où elles sont déclarées, les variables sont uniques dans leur bloc, mais peuvent être redéfinies dans des blocs sous-jacents:
 
 ```c
-int g = 5;
-
 int foo(int a) {
-  bool b = a < 12;
+  int b;
   int c = 5;
   {
     int a = a + 2;
-    c = c + a;
-    if (b) {
-      return a;
-    } else {}
+    int c = c - 1;
+    b = a + c;
   }
   
-  return c;
+  return b;
 }
 ```
 
-Dans l'exemple précédent les variables `a`, `b` et `c` sont locales, la durée de vie d'une variable va de sa déclaration à la fin du bloc de code dans lequel elle a été déclarée (ou à la fin de la fonction pour les paramètres).
-
 ### Fonctions
 
-Une fonction est une suite de déclarations de variables locales suivies d'une suite d'instructions :
+Une fonction possède des paramètres et un bloc de code :
 
 ```c
-int foo(int i) {
+int foo(int i, bool b) {
   int a = 1;
-  bool b;
-
   a = a + i;
   return a;
+}
+
+void bar() {
+  putchar(10);
+}
+```
+
+Une fonction dont le type n'est pas void doit forcèment renvoyer une valeur
+
+### Blocs
+
+Un bloc de code est délimité par des accollades, il peut contenir des déclarations de variable, des instructions ou d'autres blocs de code.
+
+Une variable déclarée dans un bloc est visible (et peut être redéfinie) dans tous ses blocs fils, en revanche elle n'est pas accessible dans son bloc père
+
+```c
+void foo(bool b) {
+  int a = 48;
+  {
+    int b = 3;
+    {
+      a = a + 1;
+      putchar(a);
+      int b = b + a;
+      putchar(b);
+    }
+  }
 }
 ```
 
@@ -71,9 +106,10 @@ Les instructions supportées sont :
 | ----------------------------- | --------------------------------------------- |
 | `putchar(n);`                 | Affiche le caractère dont le code ascii est n |
 | `x = v;`                      | Assigne la valeur v à la variable x           |
+| `type x = v;`                 | Déclaration de variable                       |
 | `if (cond) {...} else {...} ` | Branchement conditionnel                      |
 | `while (cond) {...}`          | Boucle while                                  |
-| `for (init; cond; incr) {...}`| Boucle for
+| `for (init; cond; incr) {...}`| Boucle for                                    |
 | `return e;`                   | Renvoie la valeur de l'expression e           |
 | `e;`                          | Evalue l'expression e                         |
 
@@ -123,68 +159,21 @@ Pour interpréter un programme utiliser l'option `-i` :
 minic prog.mnc -i
 ```
 
-### Vérifications supplémentaires
-
-Par défaut certaines vérifications supplémentaires sont activées, elles peuvent être désactivées en utilisant l'option `-lax`
-```
-minic prog.mnc -lax
-```
-
-Les aspects du code vérifiés sont les suivants :
-
-#### redéfinition d'une variable dans le même bloc
-
-Exemple de codes invalides sans `-lax` :
-```c
-int i = 5;
-int i = 2;
-```
-
-```c
-void foo() {
-  int i = 4;
-  int i = 5;
-}
-```
-
-En revanche le code suivant est valide :
-```c
-int i = 5;
-
-void foo(int i) {
-  bool i = false;
-}
-```
-
-#### appel de fonction dans la portée globale
-
-Exemple :
-
-```c
-int i = count();
-int c = -1;
-
-int count() {
-  c = c + 1;
-  return c;
-}
-
-int main() {
-  return 0;
-}
-```
-
-Dans ce code, l'appel à `count` utilise la variable globale `c` qui n'est pas encore définie à ce niveau de l'initialisation des variables globales, l'exécution du programme échouera.
-
 ### Afficheur
 
 Il est possible de reconstruire un fichier source à partir d'un arbre de syntaxe à l'aide de la fonction `print_program : prog -> out_channel -> unit` du module `Libminic.Minic_display` qui traduit un ast en code source qui sera écrit dans une variable de type `out_channel`.
 
-Pour reconstruire un programme on peut utiliser l'option `-d` :
+Pour reconstruire un programme on peut utiliser l'option `-disp` :
 ```
-minic prog.mnc -d
+minic prog.mnc -disp
 ```
 Sans argument le code source est envoyé sur la sortie standard, on peut également donner un fichier en argument :
 ```
-minic prog.mnc -d code.out
+minic prog.mnc -disp code.out
 ```
+## Tests
+
+Les tests du vérificataur de type, de l'interprèteur et de l'afficheur sont dans les sous dossiers typechecker, interpreter et display du dossier test.
+- Le dossier test/typechecker contient un fichier de test par aspect du langage traité, par ordre chronologique
+- Pour tester l'afficheur on vérifie qu'un programme de base et le même programme reconstruit à partir de son ast produise les mêmes résultats à l'interprètation
+- Pour tester l'interprèteur on interprète plusieurs fichiers et on compare leur sortie et leur code de retour avec le contenu du fichier interpreter.expected

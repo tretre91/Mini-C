@@ -11,16 +11,10 @@
   
   (* Traduit une boucle for en boucle while *)
   let for_loop init cond incr body =
-    let locals, assignements = Option.value init ~default:([], []) in
     let condition = Option.value cond ~default:(BCst true) in
     let increment = List.map (fun (id, e) -> Set(id, e)) incr in
-    let body = { body with code = body.code @ increment } in
-    let blk = {
-      locals = locals;
-      code = assignements @ [While (condition, body)]
-    }
-    in
-    Block blk
+    let body = body @ increment in
+    Block (init @ [While (condition, body)])
   
 %}
 
@@ -61,9 +55,8 @@
    On ajoute une règle déclenchée en cas d'erreur, donnant une
    information minimale : la position. *)
 program:
-| dl=declaration_list EOF
-       { let var_list, fun_list = dl in
-         { globals = var_list; functions = fun_list; } }
+| dl=list(global_declaration) EOF
+       { List.flatten dl }
 | error { let pos = $startpos in
           let message =
             Printf.sprintf
@@ -73,19 +66,16 @@ program:
           failwith message }
 ;
 
-(* Chaque déclaration peut concerner une variable ou une fonction. *)
-declaration_list:
-| (* vide *) { [], [] }    
-| vd=variable_decl dl=declaration_list { let vl, fl = dl in
-                                         vd :: vl, fl }
-| fd=function_decl dl=declaration_list { let vl, fl = dl in
-                                         vl, fd :: fl }
+(* Une déclaration globale, soit des variables globales soit une fonction *)
+global_declaration:
+| vars=variable_decl SEMI { List.map (fun v -> Variable v) vars }
+| func=function_decl { [Function func] }
 ;
 
-(* Déclaration de variable. *)
+(* Déclaration de variables. *)
 variable_decl:
-| t=typ x=IDENT SET e=expression SEMI { (x, t, e) }
-| t=typ x=IDENT SEMI { (x, t, default_value t) }
+| t=typ vars=separated_list(COMMA, id=IDENT e=option(SET e=expression { e }) { id, e })
+              { List.map (fun (id, e) -> id, t, Option.value e ~default:(default_value t)) vars }
 ;
 
 (* Indication de type. *)
@@ -108,31 +98,33 @@ parameter:
 
 (* Bloc d'instructions *)
 block:
-| BEGIN l=list(variable_decl) s=list(instruction) END
-    { { locals = l; code = s } }
+| BEGIN i=list(instruction) END { i }
 ;
 
 (* Instructions. *)
 instruction:
 | PUTCHAR LPAR e=expression RPAR SEMI            { Putchar(e) }
-| id=IDENT SET e=expression SEMI                 { Set(id, e) }
+| v=variable_decl SEMI                           { Decl(v) }
+| a=assignement SEMI                             { let id, e = a in Set(id, e) }
 | IF LPAR c=expression RPAR t=block ELSE f=block { If(c, t, f) }
 | WHILE LPAR c=expression RPAR b=block           { While(c, b) }
-| FOR LPAR init=option(for_init_statement) SEMI cond=option(expression) SEMI i=separated_list(COMMA, assignement) RPAR b=block
+| FOR LPAR init=for_init_statement SEMI cond=option(expression) SEMI i=separated_list(COMMA, assignement) RPAR b=block
                                                  { for_loop init cond i b }
 | RETURN e=expression SEMI                       { Return(e) }
 | e=expression SEMI                              { Expr(e) }
 | b=block                                        { Block(b) }
 ;
 
-(* Initialisation d'une boucle for *)
+(* Initialisation d'une boucle for, peut être de la forme :
+   - t x1 = v1, ..., xn = vn (déclare les variables x1...xn, toutes du même type)
+   - x1 = v1, ..., xn = vn   (attribue des valeurs à x1...xn, pas forcèment de même type)  *)
 for_init_statement:
-| t=typ l=separated_nonempty_list(COMMA, assignement)
-             { List.map (fun (id, e) -> id, t, e) l, [] }
-| l=separated_nonempty_list(COMMA, assignement)
-             { [], List.map (fun (id, e) -> Set(id, e)) l }
+| v=variable_decl { [Decl v] }
+| l=separated_list(COMMA, assignement)
+             { List.map (fun (id, e) -> Set(id, e)) l }
 ;
 
+(* Modification de variable *)
 assignement:
 | id=IDENT SET e=expression { id, e }
 ;
