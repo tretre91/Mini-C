@@ -8,7 +8,20 @@
    | Int -> Cst 0
    | Bool -> BCst false
    | Void -> Cst 0      (* peu importe, sera détécté par le vérificateur de type *)
-
+  
+  (* Traduit une boucle for en boucle while *)
+  let for_loop init cond incr body =
+    let locals, assignements = Option.value init ~default:([], []) in
+    let condition = Option.value cond ~default:(BCst true) in
+    let increment = List.map (fun (id, e) -> Set(id, e)) incr in
+    let body = { body with code = body.code @ increment } in
+    let blk = {
+      locals = locals;
+      code = assignements @ [While (condition, body)]
+    }
+    in
+    Block blk
+  
 %}
 
 (* Déclaration des lexèmes *)
@@ -17,7 +30,7 @@
 %token <string> IDENT
 %token LPAR RPAR BEGIN END
 %token RETURN SET SEMI COMMA
-%token IF ELSE WHILE PUTCHAR
+%token IF ELSE WHILE FOR PUTCHAR
 %token INT BOOL VOID
 %token ADD SUB MUL DIV MOD
 %token EQ NEQ
@@ -105,9 +118,23 @@ instruction:
 | id=IDENT SET e=expression SEMI                 { Set(id, e) }
 | IF LPAR c=expression RPAR t=block ELSE f=block { If(c, t, f) }
 | WHILE LPAR c=expression RPAR b=block           { While(c, b) }
+| FOR LPAR init=option(for_init_statement) SEMI cond=option(expression) SEMI i=separated_list(COMMA, assignement) RPAR b=block
+                                                 { for_loop init cond i b }
 | RETURN e=expression SEMI                       { Return(e) }
 | e=expression SEMI                              { Expr(e) }
 | b=block                                        { Block(b) }
+;
+
+(* Initialisation d'une boucle for *)
+for_init_statement:
+| t=typ l=separated_nonempty_list(COMMA, assignement)
+             { List.map (fun (id, e) -> id, t, e) l, [] }
+| l=separated_nonempty_list(COMMA, assignement)
+             { [], List.map (fun (id, e) -> Set(id, e)) l }
+;
+
+assignement:
+| id=IDENT SET e=expression { id, e }
 ;
 
 (* Expressions. *)

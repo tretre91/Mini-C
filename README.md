@@ -25,6 +25,30 @@ Les types disponibles sont `int`, `bool` et `void` (seulement pour les fonctions
 
 Les variables globales sont définies au début du fichier et ne peuvent pas être initialisées avec le résultat d'un appel de fonction (voir [plus bas](#vérifications-supplémentaires)), elles sont accessibles n'importe où dans le programme.
 
+### Variables locales
+
+Les variables locales sont les paramètres de fonction et les variables déclarées au début d'un bloc de code :
+
+```c
+int g = 5;
+
+int foo(int a) {
+  bool b = a < 12;
+  int c = 5;
+  {
+    int a = a + 2;
+    c = c + a;
+    if (b) {
+      return a;
+    } else {}
+  }
+  
+  return c;
+}
+```
+
+Dans l'exemple précédent les variables `a`, `b` et `c` sont locales, la durée de vie d'une variable va de sa déclaration à la fin du bloc de code dans lequel elle a été déclarée (ou à la fin de la fonction pour les paramètres).
+
 ### Fonctions
 
 Une fonction est une suite de déclarations de variables locales suivies d'une suite d'instructions :
@@ -49,6 +73,7 @@ Les instructions supportées sont :
 | `x = v;`                      | Assigne la valeur v à la variable x           |
 | `if (cond) {...} else {...} ` | Branchement conditionnel                      |
 | `while (cond) {...}`          | Boucle while                                  |
+| `for (init; cond; incr) {...}`| Boucle for
 | `return e;`                   | Renvoie la valeur de l'expression e           |
 | `e;`                          | Evalue l'expression e                         |
 
@@ -107,7 +132,7 @@ minic prog.mnc -lax
 
 Les aspects du code vérifiés sont les suivants :
 
-#### redéfinition d'une variable dans la même portée
+#### redéfinition d'une variable dans le même bloc
 
 Exemple de codes invalides sans `-lax` :
 ```c

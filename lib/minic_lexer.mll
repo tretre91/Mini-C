@@ -18,6 +18,7 @@
         "if",       IF;
         "else",     ELSE;
         "while",    WHILE;
+        "for",      FOR;
         "putchar",  PUTCHAR;
       ] ;
     fun s ->
