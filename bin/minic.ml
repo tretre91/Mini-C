@@ -5,14 +5,16 @@ type args = {
   interpret: bool;
   display: bool;
   display_file: string option;
+  output_file: string option;
 }
-    
+
 let parse_args () =
   let usage = "Usage: " ^ Sys.argv.(0) ^ " [options] <file> [-d [<file>]]\n\nAvailable options are:" in
   let input_file = ref "" in
   let interpret = ref false in
   let display = ref false in
   let display_file = ref None in
+  let output_file = ref None in
 
   let handle_display () =
     display := true;
@@ -26,7 +28,8 @@ let parse_args () =
 
   let speclist =
     [("-i", Arg.Set interpret, " Interpret the program");
-     ("-disp", Arg.Unit handle_display, " Output the source code derived from the AST, the code is displayed on stdout if no argument is given")]
+     ("-disp", Arg.Unit handle_display, " Output the source code derived from the AST, the code is displayed on stdout if no argument is given");
+     ("-o", Arg.Unit (fun () -> output_file  := Some (Sys.argv.(!Arg.current + 1))), " File in which the result will be written")]
   in
   Arg.parse (Arg.align speclist) (fun f -> if !input_file = "" then input_file := f) usage;
   {
@@ -34,6 +37,7 @@ let parse_args () =
     interpret = !interpret;
     display = !display;
     display_file = !display_file;
+    output_file = !output_file;
   }
 
 let typecheck ast args =
@@ -49,6 +53,18 @@ let display ast args =
       close_out out_channel;
     end
 
+let compile ast args =
+  let file, close = match args.output_file with
+    | None -> stdout, fun _ -> ()
+    | Some f -> open_out f, fun fd -> close_out fd
+  in
+  ast
+  |> Minic.prog_of_ast
+  |> Minic_llir.tr_prog
+  |> Minic_wasm.tr_prog
+  |> Minic_wasm.print_prog file;
+  close file
+
 let () =
   let args = parse_args () in
   let in_channel = open_in args.input_file in
@@ -61,6 +77,5 @@ let () =
   if args.interpret then
     exit (Minic_interpreter.interpret_program ast)
   else
-    exit 0
-  (* On pourrait ajouter ici des étapes suivantes.
-  exit 0 *)
+    compile ast args
+

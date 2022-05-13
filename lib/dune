@@ -13,4 +13,9 @@
   minic_ast
   minic_typechecker
   minic_interpreter
-  minic_display))
+  minic_display
+  llir
+  minic
+  minic_llir
+  minic_wasm)
+  (libraries sexplib))
