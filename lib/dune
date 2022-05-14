@@ -17,5 +17,4 @@
   llir
   minic
   minic_llir
-  minic_wasm)
-  (libraries sexplib))
+  minic_wasm))
