@@ -52,8 +52,8 @@ let main input_file output_file interpret display =
   close_in in_channel;
   typecheck ast args;
   if args.display then
-    display_ast ast args;
-  if args.interpret then
+    display_ast ast args
+  else if args.interpret then
     exit (Minic_interpreter.interpret_program ast)
   else
     compile ast args

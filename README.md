@@ -1,10 +1,14 @@
 # Mini-C
 
-Projet pour le cours de compilation.
+Projet de compilation d'un langage impératif type c vers WebAssembly.
 
 ---
 
 - [Mini-C](#mini-c)
+  - [Fonctionnalités](#fonctionnalits)
+    - [Compilateur](#compilateur)
+    - [Interpréteur](#interprteur)
+    - [Afficheur](#afficheur)
   - [Syntaxe du langage](#syntaxe-du-langage)
     - [Commentaires](#commentaires)
     - [Types](#types)
@@ -13,10 +17,46 @@ Projet pour le cours de compilation.
     - [Blocs](#blocs)
     - [Instructions](#instructions)
     - [Expressions](#expressions)
-  - [Fonctionnalités supplémentaires](#fonctionnalités-supplémentaires)
-    - [Interpréteur](#interpréteur)
-    - [Afficheur](#afficheur)
   - [Tests](#tests)
+
+
+## Fonctionnalités
+
+### Compilateur
+
+Utiliser la commande
+```
+minic prog.mnc
+```
+Pour compiler un programme, par défaut le programme compilé est envoyé sur la sortie standard, il peut être envoyé dans un fichier
+en utilisant l'option `-o`
+```
+minic prog.mnc -o prog.wat
+```
+
+Le format de sortie est le [format textuel](https://developer.mozilla.org/en-US/docs/WebAssembly/Understanding_the_text_format) de WebAssembly, le fichier produit peut ensuite être compilé vers le format binaire en utilisant par exemple [`wat2wasm`](https://github.com/WebAssembly/wabt#wabt-the-webassembly-binary-toolkit).
+
+### Interpréteur
+
+Un programme Mini-C peut être interprété en utilisant la fonction `interpret_program : prog -> int` du module `Libminic.Minic_interpreter`. La fonction d'interprétation exécute la fonction main du programme si elle existe et renvoie sa valeur de retour.
+
+Pour interpréter un programme utiliser l'option `-i` :
+```
+minic prog.mnc -i
+```
+
+### Afficheur
+
+Il est possible de reconstruire un fichier source à partir d'un arbre de syntaxe à l'aide de la fonction `print_program : prog -> out_channel -> unit` du module `Libminic.Minic_display` qui traduit un ast en code source qui sera écrit dans une variable de type `out_channel`.
+
+Pour reconstruire un programme on peut utiliser l'option `--display` :
+```
+minic prog.mnc --display
+```
+Sans argument le code source est envoyé sur la sortie standard, on peut également donner un fichier en argument :
+```
+minic prog.mnc --display -o code.out
+```
 
 ## Syntaxe du langage
 
@@ -123,60 +163,37 @@ Les instructions supportées sont :
 
 Une expression peut être sous une des formes suivantes :
 
-| expression                    | exemple                   |
-| ----------------------------- | ------------------------- |
-| **Littéraux**                 |                           |
-| constante entière             | `-5`                      |
-| constante booléenne           | `true`, `false`           |
-| **Opérations arithmétiques**  |                           |
-| addition                      | `1 + -5`                  |
-| soustraction                  | `1 - 5`                   |
-| multiplication                | `(1 + 1) * 2`             |
-| division                      | `10 / 2`                  |
-| modulo                        | `18 % 3`                  |
-| **Opérations de comparaison** |                           |
-| égalité                       | `1 == 1`, `true != false` |
-| inégalité stricte             | `1 < 2`, `2 > 1`          |
-| inégalité large               | `1 <= 1`, `3 <= 4`        |
-| **Opérations logiques**       |                           |
-| négation                      | `!true`                   |
-| et                            | `3 < 4 && true`           |
-| ou                            | `false \|\| 1 == 2`       |
-| **Opérations bit-à-bit**      |                           |
-| négation                      | `~1`                      |
-| et                            | `1 + 2 & 3`               |
-| ou                            | `64 \| 63`                |
-| ou exclusif                   | `127 ^ 255`               |
-| **Décalages**                 |                           |
-| vers la gauche (logique)      | `1 << 64`                 |
-| vers la droite (arithmétique) | `64 >> 2`                 |
-| **Autres**                    |                           |
-| variable                      | `x`                       |
-| appel de fonction             | `foo(5, false)`           |
+| expression                    | interpréteur | compilateur | exemple                   |
+| ----------------------------- | :----------: | :---------: | ------------------------- |
+| **Littéraux**                 |              |             |                           |
+| constante entière             | X            | X           | `-5`                      |
+| constante booléenne           | X            |             | `true`, `false`           |
+| **Opérations arithmétiques**  |              |             |                           |
+| addition                      | X            | X           | `1 + -5`                  |
+| soustraction                  | X            |             | `1 - 5`                   |
+| multiplication                | X            | X           | `(1 + 1) * 2`             |
+| division                      | X            |             | `10 / 2`                  |
+| modulo                        | X            |             | `18 % 3`                  |
+| **Opérations de comparaison** |              |             |                           |
+| égalité                       | X            |             | `1 == 1`, `true != false` |
+| inégalité stricte             | X            |             | `1 < 2`, `2 > 1`          |
+| inégalité large               | X            | ~           | `1 <= 1`, `3 <= 4`        |
+| **Opérations logiques**       |              |             |                           |
+| négation                      | X            |             | `!true`                   |
+| et                            | X            |             | `3 < 4 && true`           |
+| ou                            | X            |             | `false \|\| 1 == 2`       |
+| **Opérations bit-à-bit**      |              |             |                           |
+| négation                      | X            |             | `~1`                      |
+| et                            | X            |             | `1 + 2 & 3`               |
+| ou                            | X            |             | `64 \| 63`                |
+| ou exclusif                   | X            |             | `127 ^ 255`               |
+| **Décalages**                 |              |             |                           |
+| vers la gauche (logique)      | X            |             | `1 << 64`                 |
+| vers la droite (arithmétique) | X            |             | `64 >> 2`                 |
+| **Autres**                    |              |             |                           |
+| variable                      | X            | X           | `x`                       |
+| appel de fonction             | X            | X           | `foo(5, false)`           |
 
-## Fonctionnalités supplémentaires
-
-### Interpréteur
-
-Un programme Mini-C peut être interprété en utilisant la fonction `interpret_program : prog -> int` du module `Libminic.Minic_interpreter`. La fonction d'interprétation exécute la fonction main du programme si elle existe et renvoie sa valeur de retour.
-
-Pour interpréter un programme utiliser l'option `-i` :
-```
-minic prog.mnc -i
-```
-
-### Afficheur
-
-Il est possible de reconstruire un fichier source à partir d'un arbre de syntaxe à l'aide de la fonction `print_program : prog -> out_channel -> unit` du module `Libminic.Minic_display` qui traduit un ast en code source qui sera écrit dans une variable de type `out_channel`.
-
-Pour reconstruire un programme on peut utiliser l'option `-disp` :
-```
-minic prog.mnc -disp
-```
-Sans argument le code source est envoyé sur la sortie standard, on peut également donner un fichier en argument :
-```
-minic prog.mnc -disp code.out
-```
 ## Tests
 
 Les tests du vérificateur de type, de l'interpréteur et de l'afficheur sont dans les sous dossiers typechecker, interpreter et display du dossier test.
