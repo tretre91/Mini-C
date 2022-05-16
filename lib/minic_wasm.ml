@@ -48,6 +48,7 @@ let local_tee i = Instr ["local.tee"; (string_of_int i)]
 (* Instructions numériques *)
 let i32_const i = Instr ["i32.const"; (string_of_int i)]
 let i32_add = Instr ["i32.add"]
+let i32_sub = Instr ["i32.sub"]
 let i32_mul = Instr ["i32.mul"]
 let i32_lt = Instr ["i32.lt_s"]
 
@@ -101,6 +102,7 @@ let tr_prog prog =
     let rec tr_instr = function
       | Llir.Cst i -> i32_const i
       | Llir.Add -> i32_add
+      | Llir.Sub -> i32_sub
       | Llir.Mul -> i32_mul
       | Llir.Lt -> i32_lt
       | Get v -> get_var v

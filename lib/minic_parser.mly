@@ -101,12 +101,19 @@ block:
 | BEGIN i=list(instruction) END { i }
 ;
 
+(* If *)
+if_sequence:
+| IF LPAR c=expression RPAR t=block ELSE f=block       { If(c, t, f) }   (* if / else *)
+| IF LPAR c=expression RPAR t=block                    { If(c, t, []) }  (* if *)
+| IF LPAR c=expression RPAR t=block ELSE i=if_sequence { If(c, t, [i]) } (* if / else if / ... *)
+;
+
 (* Instructions. *)
 instruction:
 | PUTCHAR LPAR e=expression RPAR SEMI            { Putchar(e) }
 | v=variable_decl SEMI                           { Decl(v) }
 | a=assignement SEMI                             { let id, e = a in Set(id, e) }
-| IF LPAR c=expression RPAR t=block ELSE f=block { If(c, t, f) }
+| i=if_sequence                                  { i }
 | WHILE LPAR c=expression RPAR b=block           { While(c, b) }
 | FOR LPAR init=for_init_statement SEMI cond=option(expression) SEMI i=separated_list(COMMA, assignement) RPAR b=block
                                                  { for_loop init cond i b }

@@ -24,6 +24,7 @@ let tr_fdef func =
     | Minic.BinaryOperator (op, e1, e2) ->
       let llir_op = match op with
         | Minic.Add -> Llir.Add
+        | Minic.Sub -> Llir.Sub
         | Minic.Mult -> Llir.Mul
         | Minic.Lt -> Llir.Lt
         | _ -> failwith "TODO"

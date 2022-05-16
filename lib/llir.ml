@@ -6,6 +6,7 @@ type var =
 type instr =
   | Cst of int
   | Add
+  | Sub
   | Mul
   | Lt
   | Get of var
