@@ -16,5 +16,6 @@
   minic_display
   llir
   minic
+  wasm
   minic_llir
   minic_wasm))

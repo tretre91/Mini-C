@@ -1,29 +1,5 @@
 open Printf
-
-type typ = I32 | I64 | F32 | F64
-
-type qualifier = Mut | Const
-
-type expr =
-  | Instr of string list
-  | Module of seq
-  | Block of seq
-  | Loop of seq
-  | If of seq * seq
-  | Function of string * typ list * typ option * typ list * seq
-  | Global of string * qualifier * typ * seq
-  | Comment of string
-and seq = expr list
-
-let string_of_typ = function
-  | I32 -> "i32"
-  | I64 -> "i64"
-  | F32 -> "f32"
-  | F64 -> "f64"
-
-let string_of_qualifier = function
-  | Mut -> "mut"
-  | Const -> "const"
+open Wasm
 
 (** Affiche une liste de chaînes de caractère *)
 let print_string_list sep channel l =
@@ -81,21 +57,24 @@ let while_loop cond s =
 let comment s = Comment s
 
 (** Définition de fonction *)
-let func name nb_params nb_locals ?res body =
-  let params = List.init nb_params (fun _ -> I32) in
-  let locals = List.init nb_locals (fun _ -> I32) in
+let func name params locals res body =
   Function (name, params, res, locals, body)
+
+let default_instr = function
+  | I32 -> [i32_const 0]
+  | _ -> failwith "TODO"
 
 (** Traduction d'un programme *)
 let tr_prog prog =
   let tr_fdef fdef =
+    let nb_params = List.length Llir.(fdef.params) in
     let get_var = function
-      | Llir.Local i -> local_get (i + Llir.(fdef.nb_params))
+      | Llir.Local i -> local_get (i + nb_params)
       | Llir.Param i -> local_get i
       | Llir.Global v -> global_get v
     in
     let set_var = function
-      | Llir.Local i -> local_set (i + Llir.(fdef.nb_params))
+      | Llir.Local i -> local_set (i + nb_params)
       | Llir.Param i -> local_set i
       | Llir.Global v -> global_set v
     in
@@ -116,62 +95,77 @@ let tr_prog prog =
       List.map tr_instr seq
     in
     let body = tr_seq fdef.code in
-    func fdef.name fdef.nb_params fdef.nb_locals ~res:I32 body
+    func fdef.name fdef.params fdef.locals fdef.return body
   in
-  let globals = List.map (fun v -> Global (v, Mut, I32, [i32_const 0])) Llir.(prog.globals) in
-  Module (globals @ (List.map tr_fdef Llir.(prog.functions)))
+  let globals = List.map (fun (v, t) -> Global (v, Mut, t, default_instr t)) Llir.(prog.globals) in
+  Module (Start "__init" :: globals @ (List.map tr_fdef Llir.(prog.functions)))
 
 (** Affichage d'un programme *)
 let print_prog channel p =
-  let printf format = fprintf channel format in
-  let print = output_string channel in
-  let rec print_expr indent expr =
-    match expr with
-    | Instr atoms ->
-      print indent;
-      print_string_list " " channel atoms;
-      print "\n"
-    | Module seq ->
-      printf "%s(module\n" indent;
-      print_seq (indent ^ "  ") seq;
-      printf "%s)\n" indent
-    | Block seq ->
-      printf "%s(block\n" indent;
-      print_seq (indent ^ "  ") seq;
-      printf "%s)\n" indent
-    | Loop seq ->
-      printf "%s(loop\n" indent;
-      print_seq (indent ^ "  ") seq;
-      printf "%s)\n" indent
-    | If (s1, s2) ->
-      printf "%s(if\n" indent;
-      printf "%s  (then\n" indent;
-      print_seq (indent ^ "    ") s1;
-      printf "%s  )\n" indent;
-      printf "%s  (else\n" indent;
-      print_seq (indent ^ "    ") s2;
-      printf "%s  )\n" indent;
-      printf "%s)\n" indent
-    | Global (name, q, t, seq) ->
-      printf "%s(global $%s (%s %s)\n" indent name (string_of_qualifier q) (string_of_typ t);
-      print_seq (indent ^ "  ") seq;
-      printf "%s)\n" indent
-    | Function (name, params, result, locals, seq) ->
-      printf "%s(func $%s (export \"%s\")" indent name name;
-      List.iter (fun typ -> printf " (param %s)" (string_of_typ typ)) params;
-      if Option.is_some result then
-        printf " (result %s)" (string_of_typ (Option.get result));
-      print "\n";
-      (* Affichage des déclarations de variables locales *)
-      if locals <> [] then begin
-        printf "%s  (local " indent;
-        print_string_list " " channel (List.map string_of_typ locals);
-        print ")\n"
-      end;
-      print_seq (indent ^ "  ") seq;
-      printf "%s)\n" indent
-    | Comment c -> fprintf channel "%s;; %s" indent c
-  and print_seq indent seq =
-    List.iter (print_expr indent) seq
+  let indent = ref 0 in
+  (* Version de printf affichant une chaîne indentée *)
+  let printfi format =
+    output_string channel (String.make !indent ' ');
+    fprintf channel format
   in
-  print_expr "" p
+  (* Affiche d'une séquence d'expressions *)
+  let rec print_seq indent_incr seq =
+    indent := !indent + indent_incr;
+    List.iter print_expr seq;
+    indent := !indent - indent_incr
+  (* Affiche d'une expression *)
+  and print_expr = function
+    (* Affichage d'une instruction *)
+    | Instr atoms ->
+      printfi "%a\n" (print_string_list " ") atoms;
+    (* Affichage d'un module *)
+    | Module seq ->
+      printfi "(module\n";
+      print_seq 2 seq;
+      printfi ")\n"
+    (* Affichage d'un bloc *)
+    | Block seq ->
+      printfi "(block\n";
+      print_seq 2 seq;
+      printfi ")\n"
+    (* Affichage d'une boucle *)
+    | Loop seq ->
+      printfi "(loop\n";
+      print_seq 2 seq;
+      printfi ")\n"
+    (* Affichage d'un if *)
+    | If (s1, s2) ->
+      printfi "(if\n";
+      printfi "  (then\n";
+      print_seq 4 s1;
+      printfi "  )\n";
+      printfi "  (else\n";
+      print_seq 4 s2;
+      printfi "  )\n";
+      printfi ")\n"
+    (* Affichage d'une déclaration de variable globale *)
+    | Global (name, q, t, seq) ->
+      printfi "(global $%s (%s %s)\n" name (string_of_qualifier q) (string_of_typ t);
+      print_seq 2 seq;
+      printfi ")\n"
+    (* Affichage d'une déclaration de fonction *)
+    | Function (name, params, result, locals, seq) ->
+      let print_params channel params =
+        List.iter (fun typ -> fprintf channel " (param %s)" (string_of_typ typ)) params
+      in
+      let print_result channel result =
+        if Option.is_some result then
+          fprintf channel "(result %s)" (string_of_typ (Option.get result))
+      in
+      printfi "(func $%s (export \"%s\")%a %a\n" name name print_params params print_result result;
+      (* Affichage des déclarations de variables locales *)
+      if locals <> [] then
+        printfi "  (local %a)\n" (print_string_list " ") (List.map string_of_typ locals);
+      print_seq 2 seq;
+      printfi ")\n"
+    (* Affichage d'une clause start *)
+    | Start f -> printfi "(start $%s)\n" f
+    (* Affichage d'un commentaire *)
+    | Comment c -> printfi ";; %s" c
+  in
+  print_expr p

@@ -45,14 +45,14 @@ and block = instr list
 
 type fun_def = {
   name: string;
-  params: string list;
-  locals: string list;
+  params: (string * typ) list;
+  locals: (string * typ) list;
   return: typ;
   body: block;
 }
 
 type prog = {
-  globals: string list;
+  globals: (string * typ) list;
   functions: fun_def list;
 }
 
@@ -65,7 +65,7 @@ let prog_of_ast ast =
     (* on donne un id unique à chacune des variables locales, permet de différentier
        des variables redefinies dans un sous-bloc *)
     let locals_stack = Stack.create () in
-    let local_names = ref [] in
+    let local_variables = ref [] in
     let make_id =
       let id = ref 0 in
       fun () ->
@@ -73,11 +73,11 @@ let prog_of_ast ast =
         incr id;
         name
     in
-    let add_var v =
+    let add_var v t =
       let name = make_id () in
       let block_locals = Stack.top locals_stack in
       block_locals := name :: !block_locals;
-      local_names := name :: !local_names;
+      local_variables := (name, t) :: !local_variables;
       Hashtbl.add env v name
     in
     let get_var v = Hashtbl.find env v in
@@ -103,7 +103,7 @@ let prog_of_ast ast =
     let rec tr_instr = function (* TODO : trouver autre chose que le flatten *)
       | Ast.Putchar e -> [Putchar (tr_expr e)]
       | Ast.Decl vars ->
-        List.map (fun (v, _, e) -> add_var v; Set (get_var v, tr_expr e)) vars
+        List.map (fun (v, t, e) -> add_var v t; Set (get_var v, tr_expr e)) vars
       | Ast.Set (v, e) -> [Set (get_var v, tr_expr e)]
       | Ast.If (c, b1, b2) -> [If (tr_expr c, tr_block b1, tr_block b2)]
       | Ast.While (c, b) -> [While (tr_expr c, tr_block b)]
@@ -117,12 +117,12 @@ let prog_of_ast ast =
       b'
     in
 
-    let params = List.map (fun (s, _) -> Hashtbl.add env s s; s) Ast.(f.params) in
+    List.iter (fun (v, _) -> Hashtbl.add env v v) Ast.(f.params);
     let body = tr_block Ast.(f.body) in
     {
       name = Ast.(f.name);
-      params = params;
-      locals = !local_names;
+      params = Ast.(f.params);
+      locals = !local_variables;
       return = Ast.(f.return);
       body = body;
     }
@@ -131,9 +131,9 @@ let prog_of_ast ast =
   let globals, funcs, init_instr =
     List.fold_left (fun (globals, funcs, init_instr) global ->
       match global with
-      | Ast.Variable (v, _, e) -> 
+      | Ast.Variable (v, t, e) -> 
         Hashtbl.add env v v; 
-        v::globals, funcs, Set (v, e) :: init_instr
+        (v, t) :: globals, funcs, Set (v, e) :: init_instr
       | Ast.Function f -> globals, tr_fun f :: funcs, init_instr
     ) ([], [], []) ast
   in

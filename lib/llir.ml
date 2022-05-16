@@ -20,12 +20,13 @@ and seq = instr list
 
 type fun_def = {
   name: string;
-  nb_params: int;
-  nb_locals: int;
+  params: Wasm.dtype list;
+  locals: Wasm.dtype list;
+  return: Wasm.dtype option;
   code: seq;
 }
 
 type prog = {
-  globals: string list;
+  globals: (string * Wasm.dtype) list;
   functions: fun_def list;
 }

@@ -1,3 +1,8 @@
+(** Associe à un type minic un type de données wasm *)
+let dtype_of_typ = function
+  | Minic.Void -> None
+  | Minic.Int | Minic.Bool -> Some Wasm.I32
+
 (* Traduction d'une définition de fonction *)
 let tr_fdef func =
   (* Associe une portée (globale, locale, ou paramètre) à une variable *)
@@ -5,7 +10,7 @@ let tr_fdef func =
     let get_i_opt x l =
       let rec scan i = function
       | [] -> None
-      | y::l -> if x = y then Some i else scan (i+1) l
+      | (y, _)::l -> if x = y then Some i else scan (i+1) l
       in
       scan 0 l
     in
@@ -56,16 +61,21 @@ let tr_fdef func =
     | [] -> next
     | i::tl -> tr_instr i (tr_block tl next)
   in
-  let code = tr_block Minic.(func.body) [Llir.Cst 0; Llir.Return] in
+  let end_seq = match Minic.(func.return) with
+    | Void -> [Llir.Return]
+    | Int | Bool -> [Llir.Cst 0; Llir.Return]
+  in
+  let code = tr_block Minic.(func.body) end_seq in
   {
     Llir.name = Minic.(func.name);
-    Llir.nb_params = Minic.(List.length func.params);
-    Llir.nb_locals = Minic.(List.length func.locals);
+    Llir.params = List.map (fun (_, t) -> Option.get (dtype_of_typ t)) Minic.(func.params);
+    Llir.locals = List.map (fun (_, t) -> Option.get (dtype_of_typ t)) Minic.(func.locals);
+    Llir.return = dtype_of_typ Minic.(func.return);
     Llir.code = code;
   }
 
 (* Traduction d'un programme de la 1ère représentation intermédiaire à la seconde *)
 let tr_prog prog = {
-  Llir.globals = Minic.(prog.globals);
+  Llir.globals = List.map (fun (v, t) -> v, Option.get (dtype_of_typ t)) Minic.(prog.globals);
   Llir.functions = List.map tr_fdef Minic.(prog.functions);
 }
