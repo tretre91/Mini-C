@@ -25,18 +25,17 @@ let tr_fdef func =
   let rec tr_expr (e:Minic.expr) next =
     match e with
     | Minic.Cst n -> Llir.Cst n :: next
+    | Minic.BCst b -> Llir.Cst (if b then 1 else 0) :: next
     | Minic.Get v -> Llir.Get (convert_var v) :: next
+    | Minic.UnaryOperator (op, e) -> begin
+      match op with
+      | Minic.Minus -> Llir.Cst 0 :: tr_expr e (Op Llir.Sub :: next)
+      | Minic.Not -> tr_expr e (Op Llir.Not :: next)
+      | Minic.BNot -> tr_expr e (Llir.Cst (-1) :: Llir.Op Llir.BXor :: next)
+      end
     | Minic.BinaryOperator (op, e1, e2) ->
-      let llir_op = match op with
-        | Minic.Add -> Llir.Add
-        | Minic.Sub -> Llir.Sub
-        | Minic.Mult -> Llir.Mul
-        | Minic.Lt -> Llir.Lt
-        | _ -> failwith "TODO"
-      in
-      tr_expr e1 (tr_expr e2 (llir_op :: next))
+      tr_expr e1 (tr_expr e2 (Llir.Op (Llir.num_op_of_binop op) :: next))
     | Minic.Call (f, args) -> tr_args args (Llir.Call f :: next)
-    | _ -> failwith "TODO"
   and tr_args args next =
     List.fold_left (fun next arg -> tr_expr arg next) next args
   in

@@ -23,12 +23,28 @@ let local_tee i = Instr ["local.tee"; (string_of_int i)]
 
 (* Instructions numériques *)
 let i32_const i = Instr ["i32.const"; (string_of_int i)]
-let i32_add = Instr ["i32.add"]
-let i32_sub = Instr ["i32.sub"]
-let i32_mul = Instr ["i32.mul"]
-let i32_lt = Instr ["i32.lt_s"]
 
-let i32_eqz = Instr ["i32.eqz"]
+let add dtype = Instr [sprintf "%s.add" (string_of_typ dtype)]
+let sub dtype = Instr [sprintf "%s.sub" (string_of_typ dtype)]
+let mul dtype = Instr [sprintf "%s.mul" (string_of_typ dtype)]
+let div dtype = Instr [sprintf "%s.div_s" (string_of_typ dtype)]
+let rem dtype = Instr [sprintf "%s.rem_s" (string_of_typ dtype)]
+
+
+let eq dtype = Instr [sprintf "%s.eq" (string_of_typ dtype)]
+let eqz dtype = Instr [sprintf "%s.eqz" (string_of_typ dtype)]
+let neq dtype = Instr [sprintf "%s.ne" (string_of_typ dtype)]
+let lt dtype = Instr [sprintf "%s.lt_s" (string_of_typ dtype)]
+let le dtype = Instr [sprintf "%s.le_s" (string_of_typ dtype)]
+let gt dtype = Instr [sprintf "%s.gt_s" (string_of_typ dtype)]
+let ge dtype = Instr [sprintf "%s.ge_s" (string_of_typ dtype)]
+
+let band dtype = Instr [sprintf "%s.and" (string_of_typ dtype)]
+let bor dtype = Instr [sprintf "%s.or" (string_of_typ dtype)]
+let bxor dtype = Instr [sprintf "%s.xor" (string_of_typ dtype)]
+
+let shl dtype = Instr [sprintf "%s.shl" (string_of_typ dtype)]
+let shr_s dtype = Instr [sprintf "%s.shr_s" (string_of_typ dtype)]
 
 (* Instructions de branchement *)
 
@@ -48,7 +64,7 @@ let while_loop cond s =
   Block [
     Loop (
         cond
-      @ [i32_eqz; br_if 1]
+      @ [eqz I32; br_if 1]
       @ s
       @ [br 0]
     )
@@ -78,12 +94,29 @@ let tr_prog prog =
       | Llir.Param i -> local_set i
       | Llir.Global v -> global_set v
     in
+    let tr_num_op = Llir.(function
+      | Add -> add I32
+      | Sub -> sub I32
+      | Mul -> mul I32
+      | Div -> div I32
+      | Mod -> rem I32
+      | Eq  -> eq I32
+      | Eqz -> eqz I32
+      | Neq -> neq I32
+      | Lt  -> lt I32
+      | Leq -> le I32
+      | Gt  -> gt I32
+      | Geq -> ge I32
+      | And | BAnd -> band I32
+      | Or | BOr -> bor I32
+      | Not -> eqz I32
+      | BXor -> bxor I32
+      | Lsl -> shl I32
+      | Asr -> shr_s I32
+    ) in
     let rec tr_instr = function
       | Llir.Cst i -> i32_const i
-      | Llir.Add -> i32_add
-      | Llir.Sub -> i32_sub
-      | Llir.Mul -> i32_mul
-      | Llir.Lt -> i32_lt
+      | Llir.Op op -> tr_num_op op
       | Get v -> get_var v
       | Set v -> set_var v
       | If (s1, s2) -> if_then_else (tr_seq s1) (tr_seq s2)
