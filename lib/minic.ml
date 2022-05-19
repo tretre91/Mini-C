@@ -9,6 +9,7 @@ type typ = Ast.typ =
   | Int
   | Bool
   | Void
+  | Ptr of typ
 
 type binop = Ast.binop =
   | Add | Sub | Mult | Div | Mod
@@ -22,12 +23,13 @@ type unop = Ast.unop =
   | Not
   | BNot
 
-type expr = Ast.expr =
+type expr =
   | Cst of int
   | BCst of bool
   | UnaryOperator of unop * expr
   | BinaryOperator of binop * expr * expr
   | Get of string
+  | Read of typ * expr
   | Call of string * expr list
 
 (** Représentation des instructions, on n'utilise plus le constructeur de déclaration
@@ -35,6 +37,7 @@ type expr = Ast.expr =
 type instr =
   | Putchar of expr
   | Set of string * expr
+  | Write of typ * expr * expr
   | If of expr * block * block
   | While of expr * block
   | Return of expr
@@ -59,9 +62,28 @@ type prog = {
 (** Convertit la représentation sous forme d'ast en cette représentation
     intermédiaire *)
 let prog_of_ast ast =
+  (* environnement contenant les variables accessibles depuis un bloc ainsi que leur type *)
   let env = Hashtbl.create 32 in
+  let get_var v = fst (Hashtbl.find env v) in
+  (* environnement contenant les fonctions ainsi que leur type *)
+  let fun_env = Hashtbl.create 32 in
+
+  (* Fonction de traduction d'un expression
+      - traduit les noms de variables dans le cas Get v *)
+  let rec tr_expr e =
+    match Ast.(e.expr) with
+    | Ast.Cst i -> Cst i
+    | Ast.BCst b -> BCst b
+    | Ast.UnaryOperator (op, e) -> UnaryOperator (op, tr_expr e)
+    | Ast.BinaryOperator (op, e1, e2) -> BinaryOperator (op, tr_expr e1, tr_expr e2)
+    | Ast.Get v -> Get (get_var v)
+    | Ast.Call (f, args) -> Call (f, List.map tr_expr args)
+    | Ast.Read e -> Read (Ast.(e.t), tr_expr e)
+  in
+
   (* Fonction de traduction d'une fonction *)
   let tr_fun f =
+    Hashtbl.add fun_env Ast.(f.name) Ast.(f.return);
     (* on donne un id unique à chacune des variables locales, permet de différentier
        des variables redefinies dans un sous-bloc *)
     let locals_stack = Stack.create () in
@@ -78,9 +100,9 @@ let prog_of_ast ast =
       let block_locals = Stack.top locals_stack in
       block_locals := name :: !block_locals;
       local_variables := (name, t) :: !local_variables;
-      Hashtbl.add env v name
+      Hashtbl.add env v (name, t)
     in
-    let get_var v = Hashtbl.find env v in
+    let get_type v = snd (Hashtbl.find env v) in (* TODO : retirer les types de l'environnement des variables *)
     let enter_block () =
       Stack.push (ref []) locals_stack
     in
@@ -89,22 +111,13 @@ let prog_of_ast ast =
       List.iter (Hashtbl.remove env) block_locals;
     in
 
-    (* Fonction de traduction d'un expression, traduit les noms de variables dans
-       le cas Get v *)
-    let rec tr_expr = function
-      | Get v -> Get (get_var v)
-      | UnaryOperator (op, e) -> UnaryOperator (op, tr_expr e)
-      | BinaryOperator (op, e1, e2) -> BinaryOperator (op, tr_expr e1, tr_expr e2)
-      | Call (f, args) -> Call (f, List.map tr_expr args)
-      | _ as e -> e
-    in
-
     (* Fonction de traduction d'une instruction *)
     let rec tr_instr = function (* TODO : trouver autre chose que le flatten *)
       | Ast.Putchar e -> [Putchar (tr_expr e)]
       | Ast.Decl vars ->
         List.map (fun (v, t, e) -> add_var v t; Set (get_var v, tr_expr e)) vars
       | Ast.Set (v, e) -> [Set (get_var v, tr_expr e)]
+      | Ast.Write (p, e) -> let Ast.{ t; _ } = p in [Write (t, tr_expr p, tr_expr e)]
       | Ast.If (c, b1, b2) -> [If (tr_expr c, tr_block b1, tr_block b2)]
       | Ast.While (c, b) -> [While (tr_expr c, tr_block b)]
       | Ast.Return e -> [Return (tr_expr e)]
@@ -117,7 +130,7 @@ let prog_of_ast ast =
       b'
     in
 
-    List.iter (fun (v, _) -> Hashtbl.add env v v) Ast.(f.params);
+    List.iter (fun (v, t) -> Hashtbl.add env v (v, t)) Ast.(f.params);
     let body = tr_block Ast.(f.body) in
     {
       name = Ast.(f.name);
@@ -132,8 +145,8 @@ let prog_of_ast ast =
     List.fold_left (fun (globals, funcs, init_instr) global ->
       match global with
       | Ast.Variable (v, t, e) -> 
-        Hashtbl.add env v v; 
-        (v, t) :: globals, funcs, Set (v, e) :: init_instr
+        Hashtbl.add env v (v, t); 
+        (v, t) :: globals, funcs, Set (v, tr_expr e) :: init_instr
       | Ast.Function f -> globals, tr_fun f :: funcs, init_instr
     ) ([], [], []) ast
   in

@@ -21,6 +21,10 @@ let local_get i = Instr ["local.get"; (string_of_int i)]
 let local_set i = Instr ["local.set"; (string_of_int i)]
 let local_tee i = Instr ["local.tee"; (string_of_int i)]
 
+(* Instructions mémoire *)
+let load dtype = Instr [sprintf "%s.load" (string_of_typ dtype)]
+let store dtype = Instr [sprintf "%s.store" (string_of_typ dtype)]
+
 (* Instructions numériques *)
 let i32_const i = Instr ["i32.const"; (string_of_int i)]
 
@@ -119,6 +123,8 @@ let tr_prog prog =
       | Llir.Op op -> tr_num_op op
       | Get v -> get_var v
       | Set v -> set_var v
+      | Load dtype -> load dtype
+      | Store dtype -> store dtype
       | If (s1, s2) -> if_then_else (tr_seq s1) (tr_seq s2)
       | While (cond, seq) -> while_loop (tr_seq cond) (tr_seq seq)
       | Call f -> call f
@@ -141,12 +147,12 @@ let print_prog channel p =
     output_string channel (String.make !indent ' ');
     fprintf channel format
   in
-  (* Affiche d'une séquence d'expressions *)
+  (* Affiche une séquence d'expressions *)
   let rec print_seq indent_incr seq =
     indent := !indent + indent_incr;
     List.iter print_expr seq;
     indent := !indent - indent_incr
-  (* Affiche d'une expression *)
+  (* Affiche une expression *)
   and print_expr = function
     (* Affichage d'une instruction *)
     | Instr atoms ->

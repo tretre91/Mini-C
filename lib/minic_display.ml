@@ -2,10 +2,11 @@ open Minic_ast
 open Printf
 
 let print_program (prog: prog) (out: out_channel) =
-  let string_of_typ = function
+  let rec string_of_typ = function
     | Int -> "int"
     | Bool -> "bool"
     | Void -> "void"
+    | Ptr t -> string_of_typ t ^ "*"
   in
 
   let string_of_unop = function
@@ -35,7 +36,8 @@ let print_program (prog: prog) (out: out_channel) =
     | Asr  -> ">>"
   in
 
-  let rec string_of_expr = function
+  let rec string_of_expr e =
+    match e.expr with
     | Cst n -> string_of_int n
     | BCst b -> string_of_bool b
     | UnaryOperator(op, e) ->
@@ -47,6 +49,7 @@ let print_program (prog: prog) (out: out_channel) =
       let s_op = string_of_binop op in
       sprintf "(%s %s %s)" s1 s_op s2
     | Get x -> x
+    | Read e -> sprintf "*(%s)" (string_of_expr e)
     | Call (f, args) -> sprintf "%s(%s)" f (String.concat ", " (List.map string_of_expr args))
   in
 
@@ -83,6 +86,8 @@ let print_program (prog: prog) (out: out_channel) =
     | Set(x, e) ->
       print_assignement x e;
       output_char out ';'
+    | Write (p, e) ->
+      fprintf out "%s = %s;" (string_of_expr p) (string_of_expr e)
     | If(e, t, f) ->
       fprintf out "if (%s) " (string_of_expr e);
       print_block (spaces + 2) t;

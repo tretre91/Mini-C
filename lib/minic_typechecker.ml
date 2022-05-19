@@ -38,10 +38,11 @@ type scope =
 (** Lève une exception qui contient un message d'erreur indiquant le nom de la
     fonction où l'erreur a eu lieu. *)
 let error =
-  let string_of_typ = function
+  let rec string_of_typ = function
     | Int -> "int"
     | Bool -> "bool"
     | Void -> "void"
+    | Ptr t -> string_of_typ t ^ " ptr"
   in
   fun scope exn ->
     let prefix =
@@ -98,38 +99,52 @@ type environment = {
   variables: typ Env.t
 }
 
-(** Vérification du bon typage d'un programme. *)
+(** Vérification du bon typage d'un programme.
+    Renvoie l'ast typé *)
 let typecheck_program (prog: prog) =
   (* Vérification du bon typage et calcul du type d'une expression dans un
      environnement donné. *)
   let type_expr env e =
-    let rec type_expr = function
-      | Cst _ -> Int
-      | BCst _ -> Bool
+    let rec type_expr e =
+      match e.expr with
+      | Cst _ -> { e with t = Int }
+      | BCst _ -> { e with t = Bool }
       | UnaryOperator(op, e) ->
-        let t = type_expr e in
-        begin match op, t with
-        | Minus, Int -> Int
-        | Not, Bool -> Bool
-        | BNot, Int -> Int
-        | _, _ -> raise (Unary_operator_mismatch (op, t))
+        let e' = type_expr e in
+        let expr = UnaryOperator(op, e') in
+        begin match op, e'.t with
+        | Minus, Int -> { t = Int; expr }
+        | Not, Bool  -> { t = Bool; expr }
+        | BNot, Int  -> { t = Int; expr }
+        | _, _ -> raise (Unary_operator_mismatch (op, e'.t))
         end
       | BinaryOperator(op, e1, e2) ->
-        let t1 = type_expr e1 in
-        let t2 = type_expr e2 in
+        let e1' = type_expr e1 in
+        let e2' = type_expr e2 in
+        let t1 = e1'.t in
+        let t2 = e2'.t in
+        let expr = BinaryOperator(op, e1', e2') in
         begin match op, t1, t2 with
-        | (Add | Sub | Mult | Div | Mod | BAnd | BOr | BXor | Lsl | Asr), Int, Int -> Int
-        | (Lt | Leq | Gt | Geq), Int, Int -> Bool
-        | (And | Or), Bool, Bool -> Bool
-        | (Eq | Neq), _, _ when t1 = t2 -> Bool
+        | (Add | Sub | Mult | Div | Mod | BAnd | BOr | BXor | Lsl | Asr), Int, Int -> { t = Int; expr }
+        | (Lt | Leq | Gt | Geq), Int, Int -> { t = Bool; expr }
+        | (And | Or), Bool, Bool -> { t = Bool; expr }
+        | (Eq | Neq), _, _ when t1 = t2 -> { t = Bool; expr }
         | _, _, _ -> raise (Binary_operator_mismatch (op, t1, t2))
         end
       | Get(x) ->
         begin match Env.find_opt x env.variables with
-        | Some t -> t
+        | Some t -> { t; expr = Get x }
         | None -> raise (Undefined_variable x)
         end
+      | Read(e) ->
+        let e' = type_expr e in
+        begin match e'.t with
+          | Ptr t -> { t; expr = Read e' }
+          (* | _ -> raise (Not_a_pointer e'.t) *) (* TODO *)
+          | _ -> failwith "Using normal type as a pointer (TODO)"
+        end
       | Call(f, args) -> type_call f args
+    (* Vérification du bon typage d'un appel de fonction *)
     and type_call f args =
       let func =
         match Env.find_opt f env.functions with
@@ -138,33 +153,37 @@ let typecheck_program (prog: prog) =
       in
       let rec typecheck_args params args =
         match params, args with
-        | [], [] -> ()
+        | [], [] -> []
         | [], _ -> failwith ("too many arguments in call to " ^ func.name)
         | _, [] -> failwith ("missing arguments in call to " ^ func.name)
         | (p, tp)::params', e::args' ->
-          let te = type_expr e in
-          if te <> tp then
-            raise (Bad_function_arg (func.name, p, tp, te))
+          let e' = type_expr e in
+          if e'.t <> tp then
+            raise (Bad_function_arg (func.name, p, tp, e'.t))
           else
-            typecheck_args params' args'
+            e' :: typecheck_args params' args'
       in
-      typecheck_args func.params args;
-      func.return
+      let args' = typecheck_args func.params args in
+      { t = func.return; expr = Call (f, args') }
     in
     type_expr e
   in
 
   (* Vérifie la cohérence des types d'une de déclaration de variable et ajoute
-     cette variables à l'environnement. *)
+     cette variable à l'environnement. *)
   let typecheck_var_decl (env, local_vars) ((x, tv, e): var_decl) =
     if Env.mem x local_vars then
       failwith ("redefinition of variable " ^ x)
     else
-      let te = type_expr env e in
+      let e' = type_expr env e in
+      let te = e'.t in
       match tv, te with
       | Void, _ -> raise (Void_variable x)
       | _, _ when tv <> te -> raise (Bad_assignement (tv, x, te))
-      | _, _ ->  { env with variables = Env.add x tv env.variables }, Env.add x () local_vars
+      | _, _ ->
+        let env' = { env with variables = Env.add x tv env.variables } in
+        let local_env' = Env.add x () local_vars in
+        (env', local_env'), (x, tv, e')
   in
 
   let typecheck_function env (fdef: fun_def) =
@@ -173,47 +192,55 @@ let typecheck_program (prog: prog) =
     let rec typecheck_block env b =
       let env = ref env in
       let local_vars = ref Env.empty in
-      List.iter (typecheck_instr env local_vars) b
+      List.map (typecheck_instr env local_vars) b
     (* Vérification du bon typage d'une instruction *)
     and typecheck_instr env local_vars = function
       | Putchar(e) ->
-          if type_expr !env e <> Int then
+          let e' = type_expr !env e in
+          if e'.t = Int then
+            Putchar e'
+          else
             failwith "putchar expects an integer (ascii code) argument"
       | Decl(l) ->
-          let env', local_vars' = List.fold_left typecheck_var_decl (!env, !local_vars) l in
+          let (env', local_vars'), l' = List.fold_left_map typecheck_var_decl (!env, !local_vars) l in
           env := env';
-          local_vars := local_vars'
+          local_vars := local_vars';
+          Decl l'
       | Set(x, e) ->
-        let t_e = type_expr !env e in
+        let e' = type_expr !env e in
         let t_var = match Env.find_opt x !env.variables with
           | Some t -> t
           | None -> raise (Undefined_variable x)
         in
-        if t_var <> t_e then
-          raise (Bad_assignement (t_var, x, t_e))
-      | If(cond, t, f) ->
-          let t_c = type_expr !env cond in
-          if t_c <> Bool then
-            raise (Bad_condition ("an if", t_c))
-          else begin
-            typecheck_block !env t;
-            typecheck_block !env f
-          end
-      | While(cond, b) ->
-        let t_c = type_expr !env cond in
-        if t_c <> Bool then
-          raise (Bad_condition ("a while loop", t_c))
+        if t_var = e'.t then
+          Set (x, e')
         else
-          typecheck_block !env b
+          raise (Bad_assignement (t_var, x, e'.t))
+      | Write (p, e) -> failwith "TODO"
+      | If(cond, t, f) ->
+          let cond' = type_expr !env cond in
+          if cond'.t <> Bool then
+            raise (Bad_condition ("an if", cond'.t))
+          else
+            let t' = typecheck_block !env t in
+            let f' = typecheck_block !env f in
+            If (cond', t', f')
+      | While(cond, b) ->
+        let cond' = type_expr !env cond in
+        if cond'.t <> Bool then
+          raise (Bad_condition ("a loop", cond'.t))
+        else
+          let b' = typecheck_block !env b in
+          While (cond', b')
       | Return(e) ->
-        let t = type_expr !env e in
-        begin match fdef.return, t with
+        let e' = type_expr !env e in
+        begin match fdef.return, e'.t with
         | Void, _ -> failwith "cannot return a value from a void function"
         | t1, t2 when t1 <> t2 -> raise (Return_value_mismatch (t1, t2))
-        | _, _ -> returns := true
+        | _, _ -> returns := true; Return (e')
         end
-      | Expr(e) -> ignore (type_expr !env e)
-      | Block(b) -> typecheck_block !env b
+      | Expr(e) -> Expr (type_expr !env e)
+      | Block(b) -> Block (typecheck_block !env b)
     in
     
     if Env.mem fdef.name env.functions then
@@ -228,25 +255,32 @@ let typecheck_program (prog: prog) =
         ) env.variables fdef.params
       in
       let env' = { functions = Env.add fdef.name fdef env.functions; variables = param_env } in
-      typecheck_block env' fdef.body;
+      let body' = typecheck_block env' fdef.body in
       if fdef.return <> Void && not !returns then
         failwith "a non void function should return a value"
       else
-        env'
+        env', { fdef with body = body' }
     end
   in
 
   (* On vérifie les déclarations de variables globales et le type des fonction *)
-  ignore (List.fold_left (fun (env, vars) decl ->
+  let _, ast = List.fold_left_map (fun (env, vars) decl ->
     match decl with
-    | Variable d -> begin try
-        typecheck_var_decl (env, vars) d
+    | Variable d -> begin
+      try
+        let env', d' = typecheck_var_decl (env, vars) d in
+        env', Variable d'
       with
         e -> error Global e
       end
-    | Function f -> begin try
-        typecheck_function env f, vars
+    | Function f -> begin
+      try
+        let env', f' = typecheck_function env f in
+        (env', vars), Function f'
       with
         e -> error (Local f.name) e
       end
-  ) ({ functions=Env.empty; variables=Env.empty }, Env.empty) prog)
+  ) ({ functions=Env.empty; variables=Env.empty }, Env.empty) prog
+  in
+  ast
+

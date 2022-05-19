@@ -3,6 +3,7 @@ type typ =
   | Int
   | Bool
   | Void
+  | Ptr of typ
 
 (** Types des opérations binaires *)
 type binop =
@@ -19,13 +20,19 @@ type unop =
   | BNot
 
 (** Représentation des expressions. *)
-type expr =
+type expr_s =
   | Cst of int
   | BCst of bool
   | UnaryOperator of unop * expr
   | BinaryOperator of binop * expr * expr
   | Get of string
+  | Read of expr
   | Call of string * expr list
+(* and expr = Exp of typ * expr_s *)
+and expr = {
+  t: typ;
+  expr: expr_s
+}
 
 (** Type d'une déclaration de variable *)
 type var_decl = string * typ * expr
@@ -35,6 +42,7 @@ type instr =
   | Putchar of expr
   | Decl of var_decl list
   | Set of string * expr
+  | Write of expr * expr
   | If of expr * block * block
   | While of expr * block
   | Return of expr
@@ -52,7 +60,7 @@ type fun_def = {
 }
 
 (** Type d'un déclaration dans la portée globale (une déclaration de variable
-    globale ou de fonction)*)
+    globale ou de fonction) *)
 type global_decl =
   | Variable of var_decl
   | Function of fun_def

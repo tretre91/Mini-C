@@ -8,10 +8,17 @@
    | Int -> Cst 0
    | Bool -> BCst false
    | Void -> Cst 0      (* peu importe, sera détécté par le vérificateur de type *)
+   | Ptr _ -> failwith "TODO : ptr default value, parser.mly"
+
+  let make_expr e =
+    { t = Void; expr = e }
+
+  let ptr_offset id e =
+    make_expr (BinaryOperator (Add, make_expr (Get id), e))
   
   (* Traduit une boucle for en boucle while *)
   let for_loop init cond incr body =
-    let condition = Option.value cond ~default:(BCst true) in
+    let condition = Option.value cond ~default:(make_expr (BCst true)) in
     let increment = List.map (fun (id, e) -> Set(id, e)) incr in
     let body = body @ increment in
     Block (init @ [While (condition, body)])
@@ -22,7 +29,7 @@
 %token <int> CST
 %token <bool> BOOL_CST
 %token <string> IDENT
-%token LPAR RPAR BEGIN END
+%token LPAR RPAR BEGIN END LBRACKET RBRACKET
 %token RETURN SET SEMI COMMA
 %token IF ELSE WHILE FOR PUTCHAR
 %token INT BOOL VOID
@@ -75,7 +82,7 @@ global_declaration:
 (* Déclaration de variables. *)
 variable_decl:
 | t=typ vars=separated_list(COMMA, id=IDENT e=option(SET e=expression { e }) { id, e })
-              { List.map (fun (id, e) -> id, t, Option.value e ~default:(default_value t)) vars }
+              { List.map (fun (id, e) -> id, t, Option.value e ~default:(make_expr (default_value t))) vars }
 ;
 
 (* Indication de type. *)
@@ -83,6 +90,7 @@ typ:
 | INT   { Int }
 | BOOL  { Bool }
 | VOID  { Void }
+| t=typ MUL { Ptr t } // ?
 ;
 
 (* Déclaration de fonction. *)
@@ -113,6 +121,8 @@ instruction:
 | PUTCHAR LPAR e=expression RPAR SEMI            { Putchar(e) }
 | v=variable_decl SEMI                           { Decl(v) }
 | a=assignement SEMI                             { let id, e = a in Set(id, e) }
+| MUL p=expression SET e=expression SEMI         { Write (p, e) }
+| s=subscript SET e=expression SEMI              { let id, i = s in Write (ptr_offset id i, e)}
 | i=if_sequence                                  { i }
 | WHILE LPAR c=expression RPAR b=block           { While(c, b) }
 | FOR LPAR init=for_init_statement SEMI cond=option(expression) SEMI i=separated_list(COMMA, assignement) RPAR b=block
@@ -136,33 +146,40 @@ assignement:
 | id=IDENT SET e=expression { id, e }
 ;
 
+subscript:
+| id=IDENT LBRACKET i=expression RBRACKET { id, i }
+;
+
 (* Expressions. *)
 expression:
-| LPAR e=expression RPAR           { e }
-| n=CST                            { Cst(n) }
-| b=BOOL_CST                       { BCst(b) }
-| SUB e=expression                 { UnaryOperator(Minus, e) }
-| ADD e=expression                 { e }
-| NOT e=expression                 { UnaryOperator(Not, e) }
-| BNOT e=expression                { UnaryOperator(BNot, e) }
-| e1=expression ADD e2=expression  { BinaryOperator(Add, e1, e2) }
-| e1=expression SUB e2=expression  { BinaryOperator(Sub, e1, e2) }
-| e1=expression MUL e2=expression  { BinaryOperator(Mult, e1, e2) }
-| e1=expression DIV e2=expression  { BinaryOperator(Div, e1, e2) }
-| e1=expression MOD e2=expression  { BinaryOperator(Mod, e1, e2) }
-| e1=expression EQ e2=expression   { BinaryOperator(Eq, e1, e2) }
-| e1=expression NEQ e2=expression  { BinaryOperator(Neq, e1, e2) }
-| e1=expression LT e2=expression   { BinaryOperator(Lt, e1, e2) }
-| e1=expression LEQ e2=expression  { BinaryOperator(Leq, e1, e2) }
-| e1=expression GT e2=expression   { BinaryOperator(Gt, e1, e2) }
-| e1=expression GEQ e2=expression  { BinaryOperator(Geq, e1, e2) }
-| e1=expression AND e2=expression  { BinaryOperator(And, e1, e2) }
-| e1=expression OR e2=expression   { BinaryOperator(Or, e1, e2) }
-| e1=expression BAND e2=expression { BinaryOperator(BAnd, e1, e2) }
-| e1=expression BOR e2=expression  { BinaryOperator(BOr, e1, e2) }
-| e1=expression BXOR e2=expression { BinaryOperator(BXor, e1, e2) }
-| e1=expression LSL e2=expression  { BinaryOperator(Lsl, e1, e2) }
-| e1=expression ASR e2=expression  { BinaryOperator(Asr, e1, e2) }
-| id=IDENT                         { Get(id) }
-| f=IDENT LPAR a=separated_list(COMMA, expression) RPAR { Call(f, a) }
+| LPAR e=expression RPAR            { e }
+| n=CST                             { make_expr (Cst(n)) }
+| b=BOOL_CST                        { make_expr (BCst(b)) }
+| SUB e=expression                  { make_expr (UnaryOperator(Minus, e)) }
+| ADD e=expression                  { e }
+| NOT e=expression                  { make_expr (UnaryOperator(Not, e)) }
+| BNOT e=expression                 { make_expr (UnaryOperator(BNot, e)) }
+| e1=expression ADD e2=expression   { make_expr (BinaryOperator(Add, e1, e2)) }
+| e1=expression SUB e2=expression   { make_expr (BinaryOperator(Sub, e1, e2)) }
+| e1=expression MUL e2=expression   { make_expr (BinaryOperator(Mult, e1, e2)) }
+| e1=expression DIV e2=expression   { make_expr (BinaryOperator(Div, e1, e2)) }
+| e1=expression MOD e2=expression   { make_expr (BinaryOperator(Mod, e1, e2)) }
+| e1=expression EQ e2=expression    { make_expr (BinaryOperator(Eq, e1, e2)) }
+| e1=expression NEQ e2=expression   { make_expr (BinaryOperator(Neq, e1, e2)) }
+| e1=expression LT e2=expression    { make_expr (BinaryOperator(Lt, e1, e2)) }
+| e1=expression LEQ e2=expression   { make_expr (BinaryOperator(Leq, e1, e2)) }
+| e1=expression GT e2=expression    { make_expr (BinaryOperator(Gt, e1, e2)) }
+| e1=expression GEQ e2=expression   { make_expr (BinaryOperator(Geq, e1, e2)) }
+| e1=expression AND e2=expression   { make_expr (BinaryOperator(And, e1, e2)) }
+| e1=expression OR e2=expression    { make_expr (BinaryOperator(Or, e1, e2)) }
+| e1=expression BAND e2=expression  { make_expr (BinaryOperator(BAnd, e1, e2)) }
+| e1=expression BOR e2=expression   { make_expr (BinaryOperator(BOr, e1, e2)) }
+| e1=expression BXOR e2=expression  { make_expr (BinaryOperator(BXor, e1, e2)) }
+| e1=expression LSL e2=expression   { make_expr (BinaryOperator(Lsl, e1, e2)) }
+| e1=expression ASR e2=expression   { make_expr (BinaryOperator(Asr, e1, e2)) }
+| id=IDENT                          { make_expr (Get(id)) }
+| MUL e=expression                  { make_expr (Read(e)) }
+| s=subscript                       { let id, i = s in make_expr (Read (ptr_offset id i)) }
+| f=IDENT LPAR a=separated_list(COMMA, expression) RPAR 
+                                    { make_expr (Call(f, a)) }
 ;

@@ -2,6 +2,7 @@
 let dtype_of_typ = function
   | Minic.Void -> None
   | Minic.Int | Minic.Bool -> Some Wasm.I32
+  | Ptr _ -> Some Wasm.I32 (* TODO : utiliser des I64 *)
 
 (* Traduction d'une définition de fonction *)
 let tr_fdef func =
@@ -27,6 +28,7 @@ let tr_fdef func =
     | Minic.Cst n -> Llir.Cst n :: next
     | Minic.BCst b -> Llir.Cst (if b then 1 else 0) :: next
     | Minic.Get v -> Llir.Get (convert_var v) :: next
+    | Minic.Read (t, ptr) -> tr_expr ptr (Llir.Load (Option.get (dtype_of_typ t)) :: next)
     | Minic.UnaryOperator (op, e) -> begin
       match op with
       | Minic.Minus -> Llir.Cst 0 :: tr_expr e (Op Llir.Sub :: next)
@@ -44,6 +46,7 @@ let tr_fdef func =
     match i with
     | Minic.Putchar e -> tr_expr e (Llir.Putchar :: next)
     | Minic.Set (v, e) -> tr_expr e (Llir.Set (convert_var v) :: next)
+    | Minic.Write (t, p, e) -> tr_expr e (tr_expr p (Llir.Store (Option.get (dtype_of_typ t)) :: next))
     | Minic.Expr e -> tr_expr e next
     | Minic.Return e -> tr_expr e [Llir.Return]
     | Minic.If (e, b1, b2) -> 

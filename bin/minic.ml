@@ -8,11 +8,6 @@ type args = {
   output_file: string option;
 }
 
-(** Effectue une vérification de type sur le programme source *)
-let typecheck ast args =
-  Minic_typechecker.typecheck_program ast;
-  Printf.printf "Successfully checked program %s\n" args.input_file
-
 (** Reconstruit et affiche un programme minic reconstruit à partir de l'ast
     d'un programme donné *)
 let display_ast ast args =
@@ -50,13 +45,14 @@ let main input_file output_file interpret display =
   let lexbuf = Lexing.from_channel in_channel in
   let ast = Minic_parser.program Minic_lexer.token lexbuf in
   close_in in_channel;
-  typecheck ast args;
+  let typed_ast = Minic_typechecker.typecheck_program ast in
   if args.display then
     display_ast ast args
   else if args.interpret then
-    exit (Minic_interpreter.interpret_program ast)
+    (* exit (Minic_interpreter.interpret_program ast) *)
+    failwith "TODO"
   else
-    compile ast args
+    compile typed_ast args
 
 let command_line =
   let output_file =

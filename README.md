@@ -167,29 +167,29 @@ Une expression peut être sous une des formes suivantes :
 | ----------------------------- | :----------: | :---------: | ------------------------- |
 | **Littéraux**                 |              |             |                           |
 | constante entière             | X            | X           | `-5`                      |
-| constante booléenne           | X            |             | `true`, `false`           |
+| constante booléenne           | X            | X           | `true`, `false`           |
 | **Opérations arithmétiques**  |              |             |                           |
 | addition                      | X            | X           | `1 + -5`                  |
-| soustraction                  | X            |             | `1 - 5`                   |
+| soustraction                  | X            | X           | `1 - 5`                   |
 | multiplication                | X            | X           | `(1 + 1) * 2`             |
-| division                      | X            |             | `10 / 2`                  |
-| modulo                        | X            |             | `18 % 3`                  |
+| division                      | X            | X           | `10 / 2`                  |
+| modulo                        | X            | X           | `18 % 3`                  |
 | **Opérations de comparaison** |              |             |                           |
-| égalité                       | X            |             | `1 == 1`, `true != false` |
-| inégalité stricte             | X            |             | `1 < 2`, `2 > 1`          |
-| inégalité large               | X            | ~           | `1 <= 1`, `3 <= 4`        |
+| égalité                       | X            | X           | `1 == 1`, `true != false` |
+| inégalité stricte             | X            | X           | `1 < 2`, `2 > 1`          |
+| inégalité large               | X            | X           | `1 <= 1`, `3 <= 4`        |
 | **Opérations logiques**       |              |             |                           |
-| négation                      | X            |             | `!true`                   |
-| et                            | X            |             | `3 < 4 && true`           |
-| ou                            | X            |             | `false \|\| 1 == 2`       |
+| négation                      | X            | X           | `!true`                   |
+| et                            | X            | X           | `3 < 4 && true`           |
+| ou                            | X            | X           | `false \|\| 1 == 2`       |
 | **Opérations bit-à-bit**      |              |             |                           |
-| négation                      | X            |             | `~1`                      |
-| et                            | X            |             | `1 + 2 & 3`               |
-| ou                            | X            |             | `64 \| 63`                |
-| ou exclusif                   | X            |             | `127 ^ 255`               |
+| négation                      | X            | X           | `~1`                      |
+| et                            | X            | X           | `1 + 2 & 3`               |
+| ou                            | X            | X           | `64 \| 63`                |
+| ou exclusif                   | X            | X           | `127 ^ 255`               |
 | **Décalages**                 |              |             |                           |
-| vers la gauche (logique)      | X            |             | `1 << 64`                 |
-| vers la droite (arithmétique) | X            |             | `64 >> 2`                 |
+| vers la gauche (logique)      | X            | X           | `1 << 64`                 |
+| vers la droite (arithmétique) | X            | X           | `64 >> 2`                 |
 | **Autres**                    |              |             |                           |
 | variable                      | X            | X           | `x`                       |
 | appel de fonction             | X            | X           | `foo(5, false)`           |

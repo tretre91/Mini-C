@@ -68,6 +68,10 @@ rule token = parse
       { BEGIN }
   | "}"
       { END }
+  | "["
+      { LBRACKET }
+  | "]"
+      { RBRACKET }
   | "+"
       { ADD }
   | "-"
