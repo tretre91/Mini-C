@@ -43,6 +43,7 @@ let error =
     | Bool -> "bool"
     | Void -> "void"
     | Ptr t -> string_of_typ t ^ " ptr"
+    | Tab t -> string_of_typ t ^ "[]"
   in
   fun scope exn ->
     let prefix =
@@ -133,15 +134,17 @@ let typecheck_program (prog: prog) =
         end
       | Get(x) ->
         begin match Env.find_opt x env.variables with
+        | Some (Tab t) -> { t = Ptr t; expr = Get x }
         | Some t -> { t; expr = Get x }
         | None -> raise (Undefined_variable x)
         end
-      | Read(e) ->
-        let e' = type_expr e in
-        begin match e'.t with
-          | Ptr t -> { t; expr = Read e' }
+      | Read(ptr, offset) ->
+        let ptr' = type_expr ptr in
+        let offset' = type_expr offset in
+        begin match ptr'.t, offset'.t with
+          | Ptr t, Int -> { t; expr = Read (ptr', offset') }
           (* | _ -> raise (Not_a_pointer e'.t) *) (* TODO *)
-          | _ -> failwith "Using normal type as a pointer (TODO)"
+          | _, _ -> failwith "Using normal type as a pointer (TODO)"
         end
       | Call(f, args) -> type_call f args
     (* Vérification du bon typage d'un appel de fonction *)
@@ -179,11 +182,15 @@ let typecheck_program (prog: prog) =
       let te = e'.t in
       match tv, te with
       | Void, _ -> raise (Void_variable x)
-      | _, _ when tv <> te -> raise (Bad_assignement (tv, x, te))
-      | _, _ ->
+      | Tab _, _ ->
         let env' = { env with variables = Env.add x tv env.variables } in
         let local_env' = Env.add x () local_vars in
         (env', local_env'), (x, tv, e')
+      | _, _ when tv = te -> 
+        let env' = { env with variables = Env.add x tv env.variables } in
+        let local_env' = Env.add x () local_vars in
+        (env', local_env'), (x, tv, e')
+      | _, _ -> raise (Bad_assignement (tv, x, te))        
   in
 
   let typecheck_function env (fdef: fun_def) =
@@ -216,7 +223,14 @@ let typecheck_program (prog: prog) =
           Set (x, e')
         else
           raise (Bad_assignement (t_var, x, e'.t))
-      | Write (p, e) -> failwith "TODO"
+      | Write (ptr, offset, e) ->
+        let ptr' = type_expr !env ptr in
+        let offset' = type_expr !env offset in
+        let e' = type_expr !env e in
+        begin match ptr'.t, offset'.t, e'.t with
+        | Ptr t, Int, te when t = te -> Write (ptr', offset', e')
+        | _, _, _ -> failwith "TODO : bad mem assignement, typechecker.ml"
+        end
       | If(cond, t, f) ->
           let cond' = type_expr !env cond in
           if cond'.t <> Bool then

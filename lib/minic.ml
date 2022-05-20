@@ -10,6 +10,7 @@ type typ = Ast.typ =
   | Bool
   | Void
   | Ptr of typ
+  | Tab of typ
 
 type binop = Ast.binop =
   | Add | Sub | Mult | Div | Mod
@@ -23,6 +24,7 @@ type unop = Ast.unop =
   | Not
   | BNot
 
+(** Représentation des expressions, on retire les informations de type de l'AST *)
 type expr =
   | Cst of int
   | BCst of bool
@@ -55,6 +57,7 @@ type fun_def = {
 }
 
 type prog = {
+  static: (int * int) list;
   globals: (string * typ) list;
   functions: fun_def list;
 }
@@ -62,9 +65,23 @@ type prog = {
 (** Convertit la représentation sous forme d'ast en cette représentation
     intermédiaire *)
 let prog_of_ast ast =
+  (* Donne la taille d'un objet en octets *)
+  let sizeof = function
+    | Int | Bool | Ptr _ -> 4
+    | _ -> failwith "sizeof"
+  in
+  (* Crée une expression correspondant à un accès mémoire *)
+  let make_ptr t base offset =
+    BinaryOperator (Add, base, BinaryOperator (Mult, Cst (sizeof t), offset))
+  in
+  (* Récupère le type d'un pointeur *)
+  let get_ptr_type = function
+    | Ptr t -> t
+    | _ -> failwith "Not a pointer"
+  in
   (* environnement contenant les variables accessibles depuis un bloc ainsi que leur type *)
   let env = Hashtbl.create 32 in
-  let get_var v = fst (Hashtbl.find env v) in
+  let get_var v = Hashtbl.find env v in
   (* environnement contenant les fonctions ainsi que leur type *)
   let fun_env = Hashtbl.create 32 in
 
@@ -78,7 +95,9 @@ let prog_of_ast ast =
     | Ast.BinaryOperator (op, e1, e2) -> BinaryOperator (op, tr_expr e1, tr_expr e2)
     | Ast.Get v -> Get (get_var v)
     | Ast.Call (f, args) -> Call (f, List.map tr_expr args)
-    | Ast.Read e -> Read (Ast.(e.t), tr_expr e)
+    | Ast.Read (ptr, offset) ->
+      let t = get_ptr_type Ast.(ptr.t) in
+      Read (t, make_ptr t (tr_expr ptr) (tr_expr offset))
   in
 
   (* Fonction de traduction d'une fonction *)
@@ -100,9 +119,8 @@ let prog_of_ast ast =
       let block_locals = Stack.top locals_stack in
       block_locals := name :: !block_locals;
       local_variables := (name, t) :: !local_variables;
-      Hashtbl.add env v (name, t)
+      Hashtbl.add env v name
     in
-    let get_type v = snd (Hashtbl.find env v) in (* TODO : retirer les types de l'environnement des variables *)
     let enter_block () =
       Stack.push (ref []) locals_stack
     in
@@ -117,7 +135,9 @@ let prog_of_ast ast =
       | Ast.Decl vars ->
         List.map (fun (v, t, e) -> add_var v t; Set (get_var v, tr_expr e)) vars
       | Ast.Set (v, e) -> [Set (get_var v, tr_expr e)]
-      | Ast.Write (p, e) -> let Ast.{ t; _ } = p in [Write (t, tr_expr p, tr_expr e)]
+      | Ast.Write (ptr, offset, e) ->
+        let t = get_ptr_type Ast.(ptr.t) in
+        [Write (t, make_ptr t (tr_expr ptr) (tr_expr offset), tr_expr e)]
       | Ast.If (c, b1, b2) -> [If (tr_expr c, tr_block b1, tr_block b2)]
       | Ast.While (c, b) -> [While (tr_expr c, tr_block b)]
       | Ast.Return e -> [Return (tr_expr e)]
@@ -130,7 +150,7 @@ let prog_of_ast ast =
       b'
     in
 
-    List.iter (fun (v, t) -> Hashtbl.add env v (v, t)) Ast.(f.params);
+    List.iter (fun (v, _) -> Hashtbl.add env v v) Ast.(f.params);
     let body = tr_block Ast.(f.body) in
     {
       name = Ast.(f.name);
@@ -141,14 +161,22 @@ let prog_of_ast ast =
     }
   in
 
-  let globals, funcs, init_instr =
-    List.fold_left (fun (globals, funcs, init_instr) global ->
+  let static_offset = ref 0 in
+  let static, globals, funcs, init_instr =
+    List.fold_left (fun (static, globals, funcs, init_instr) global ->
       match global with
-      | Ast.Variable (v, t, e) -> 
-        Hashtbl.add env v (v, t); 
-        (v, t) :: globals, funcs, Set (v, tr_expr e) :: init_instr
-      | Ast.Function f -> globals, tr_fun f :: funcs, init_instr
-    ) ([], [], []) ast
+      | Ast.Variable (v, t, e) ->
+        Hashtbl.add env v v;
+        let e' = tr_expr e in
+        begin match t, e' with
+        | Tab t, Cst n ->
+          let offset = !static_offset in
+          static_offset := offset + n * (sizeof t);
+          (offset, n) :: static, (v, Ptr t) :: globals, funcs, Set (v, Cst offset)::init_instr
+        | _, _ -> static, (v, t) :: globals, funcs, Set (v, tr_expr e) :: init_instr
+        end
+      | Ast.Function f -> static, globals, tr_fun f :: funcs, init_instr
+    ) ([], [], [], []) ast
   in
   (* on crée une fonction init qui contient les initialisations de variables globales 
      TODO plus tard : initiliser directement ? appeler la fonction automatiquement ? *)
@@ -160,4 +188,4 @@ let prog_of_ast ast =
     body = init_instr;
   }
   in
-  { globals = globals; functions = init_fun :: funcs }
+  { static = static; globals = globals; functions = init_fun :: funcs }

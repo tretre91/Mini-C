@@ -2,7 +2,8 @@
 let dtype_of_typ = function
   | Minic.Void -> None
   | Minic.Int | Minic.Bool -> Some Wasm.I32
-  | Ptr _ -> Some Wasm.I32 (* TODO : utiliser des I64 *)
+  | Ptr _ -> Some Wasm.I32
+  | Tab _ -> failwith "unreachable"
 
 (* Traduction d'une définition de fonction *)
 let tr_fdef func =
@@ -46,7 +47,7 @@ let tr_fdef func =
     match i with
     | Minic.Putchar e -> tr_expr e (Llir.Putchar :: next)
     | Minic.Set (v, e) -> tr_expr e (Llir.Set (convert_var v) :: next)
-    | Minic.Write (t, p, e) -> tr_expr e (tr_expr p (Llir.Store (Option.get (dtype_of_typ t)) :: next))
+    | Minic.Write (t, p, e) -> tr_expr p (tr_expr e (Llir.Store (Option.get (dtype_of_typ t)) :: next))
     | Minic.Expr e -> tr_expr e next
     | Minic.Return e -> tr_expr e [Llir.Return]
     | Minic.If (e, b1, b2) -> 
@@ -66,6 +67,7 @@ let tr_fdef func =
   let end_seq = match Minic.(func.return) with
     | Void -> [Llir.Return]
     | Int | Bool -> [Llir.Cst 0; Llir.Return]
+    | _ -> []
   in
   let code = tr_block Minic.(func.body) end_seq in
   {
@@ -78,6 +80,7 @@ let tr_fdef func =
 
 (* Traduction d'un programme de la 1ère représentation intermédiaire à la seconde *)
 let tr_prog prog = {
+  Llir.static = Minic.(prog.static);
   Llir.globals = List.map (fun (v, t) -> v, Option.get (dtype_of_typ t)) Minic.(prog.globals);
   Llir.functions = List.map tr_fdef Minic.(prog.functions);
 }

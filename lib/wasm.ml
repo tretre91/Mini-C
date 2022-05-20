@@ -11,6 +11,7 @@ type expr =
   | Function of string * dtype list * dtype option * dtype list * seq
   | Global of string * qualifier * dtype * seq
   | Start of string
+  | Memory of int
   | Comment of string
 and seq = expr list
 

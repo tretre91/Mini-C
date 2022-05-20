@@ -5,10 +5,11 @@
 
   (* Valeur par défaut d'une variable d'un type donné *)
   let default_value = function
-   | Int -> Cst 0
-   | Bool -> BCst false
-   | Void -> Cst 0      (* peu importe, sera détécté par le vérificateur de type *)
-   | Ptr _ -> failwith "TODO : ptr default value, parser.mly"
+    | Int -> Cst 0
+    | Bool -> BCst false
+    | Void -> Cst 0      (* peu importe, sera détécté par le vérificateur de type *)
+    | Ptr _ -> failwith "TODO : ptr default value, parser.mly"
+    | Tab _ -> failwith "TODO : tab default value, parser.mly"
 
   let make_expr e =
     { t = Void; expr = e }
@@ -83,6 +84,7 @@ global_declaration:
 variable_decl:
 | t=typ vars=separated_list(COMMA, id=IDENT e=option(SET e=expression { e }) { id, e })
               { List.map (fun (id, e) -> id, t, Option.value e ~default:(make_expr (default_value t))) vars }
+| t=typ id=IDENT LBRACKET n=CST RBRACKET { [id, Tab(t), make_expr (Cst n)] }
 ;
 
 (* Indication de type. *)
@@ -91,6 +93,7 @@ typ:
 | BOOL  { Bool }
 | VOID  { Void }
 | t=typ MUL { Ptr t } // ?
+| t=typ LBRACKET RBRACKET { Tab t }
 ;
 
 (* Déclaration de fonction. *)
@@ -116,13 +119,17 @@ if_sequence:
 | IF LPAR c=expression RPAR t=block ELSE i=if_sequence { If(c, t, [i]) } (* if / else if / ... *)
 ;
 
+(* Accès à une case d'un tableau *)
+subscript:
+| id=IDENT LBRACKET i=expression RBRACKET { id, i }
+;
+
 (* Instructions. *)
 instruction:
 | PUTCHAR LPAR e=expression RPAR SEMI            { Putchar(e) }
 | v=variable_decl SEMI                           { Decl(v) }
 | a=assignement SEMI                             { let id, e = a in Set(id, e) }
-| MUL p=expression SET e=expression SEMI         { Write (p, e) }
-| s=subscript SET e=expression SEMI              { let id, i = s in Write (ptr_offset id i, e)}
+| s=subscript SET e=expression SEMI              { let id, i = s in Write (make_expr (Get id), i, e) }
 | i=if_sequence                                  { i }
 | WHILE LPAR c=expression RPAR b=block           { While(c, b) }
 | FOR LPAR init=for_init_statement SEMI cond=option(expression) SEMI i=separated_list(COMMA, assignement) RPAR b=block
@@ -144,10 +151,6 @@ for_init_statement:
 (* Modification de variable *)
 assignement:
 | id=IDENT SET e=expression { id, e }
-;
-
-subscript:
-| id=IDENT LBRACKET i=expression RBRACKET { id, i }
 ;
 
 (* Expressions. *)
@@ -178,8 +181,7 @@ expression:
 | e1=expression LSL e2=expression   { make_expr (BinaryOperator(Lsl, e1, e2)) }
 | e1=expression ASR e2=expression   { make_expr (BinaryOperator(Asr, e1, e2)) }
 | id=IDENT                          { make_expr (Get(id)) }
-| MUL e=expression                  { make_expr (Read(e)) }
-| s=subscript                       { let id, i = s in make_expr (Read (ptr_offset id i)) }
+| s=subscript                       { let id, i = s in make_expr (Read (make_expr (Get id), i)) }
 | f=IDENT LPAR a=separated_list(COMMA, expression) RPAR 
                                     { make_expr (Call(f, a)) }
 ;

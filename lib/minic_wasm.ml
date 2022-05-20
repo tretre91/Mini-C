@@ -137,7 +137,7 @@ let tr_prog prog =
     func fdef.name fdef.params fdef.locals fdef.return body
   in
   let globals = List.map (fun (v, t) -> Global (v, Mut, t, default_instr t)) Llir.(prog.globals) in
-  Module (Start "__init" :: globals @ (List.map tr_fdef Llir.(prog.functions)))
+  Module (Start "__init" :: Memory 1 :: globals @ (List.map tr_fdef Llir.(prog.functions)))
 
 (** Affichage d'un programme *)
 let print_prog channel p =
@@ -204,6 +204,8 @@ let print_prog channel p =
       printfi ")\n"
     (* Affichage d'une clause start *)
     | Start f -> printfi "(start $%s)\n" f
+    (* Affichage d'une clause memory *)
+    | Memory i -> printfi "(memory %d)\n" i
     (* Affichage d'un commentaire *)
     | Comment c -> printfi ";; %s" c
   in

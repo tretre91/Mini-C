@@ -33,6 +33,7 @@ type fun_def = {
 }
 
 type prog = {
+  static: (int * int) list;
   globals: (string * Wasm.dtype) list;
   functions: fun_def list;
 }

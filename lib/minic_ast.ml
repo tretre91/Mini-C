@@ -4,6 +4,7 @@ type typ =
   | Bool
   | Void
   | Ptr of typ
+  | Tab of typ
 
 (** Types des opérations binaires *)
 type binop =
@@ -26,9 +27,9 @@ type expr_s =
   | UnaryOperator of unop * expr
   | BinaryOperator of binop * expr * expr
   | Get of string
-  | Read of expr
+  | Read of expr * expr (* adresse * offset *)
   | Call of string * expr list
-(* and expr = Exp of typ * expr_s *)
+(* Représentation d'une expression typée *)
 and expr = {
   t: typ;
   expr: expr_s
@@ -42,7 +43,7 @@ type instr =
   | Putchar of expr
   | Decl of var_decl list
   | Set of string * expr
-  | Write of expr * expr
+  | Write of expr * expr * expr
   | If of expr * block * block
   | While of expr * block
   | Return of expr
