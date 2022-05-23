@@ -92,7 +92,6 @@ typ:
 | INT   { Int }
 | BOOL  { Bool }
 | VOID  { Void }
-| t=typ MUL { Ptr t } // ?
 | t=typ LBRACKET RBRACKET { Tab t }
 ;
 

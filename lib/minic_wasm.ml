@@ -137,7 +137,7 @@ let tr_prog prog =
     func fdef.name fdef.params fdef.locals fdef.return body
   in
   let globals = List.map (fun (v, t) -> Global (v, Mut, t, default_instr t)) Llir.(prog.globals) in
-  Module (Start "__init" :: Memory 1 :: globals @ (List.map tr_fdef Llir.(prog.functions)))
+  Module (Start "__init" :: Memory 2 :: Global ("__sp", Mut, I32, [i32_const 65536]) :: globals @ (List.map tr_fdef Llir.(prog.functions)))
 
 (** Affichage d'un programme *)
 let print_prog channel p =

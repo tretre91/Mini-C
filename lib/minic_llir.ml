@@ -64,7 +64,7 @@ let tr_fdef func =
     | [] -> next
     | i::tl -> tr_instr i (tr_block tl next)
   in
-  let end_seq = match Minic.(func.return) with
+  let end_seq = match Minic.(func.return) with (* TODO : retirer dans les cas non-void *)
     | Void -> [Llir.Return]
     | Int | Bool -> [Llir.Cst 0; Llir.Return]
     | _ -> []

@@ -128,34 +128,55 @@ let prog_of_ast ast =
       let block_locals = !(Stack.pop locals_stack) in
       List.iter (Hashtbl.remove env) block_locals;
     in
+    
+    (* Fonction de traduction d'un bloc d'instructions *)
+    let rec tr_block b =
+      let stack_size = ref 0 in
+      let sp = "__sp" in
+      let incr_sp size = Set (sp, BinaryOperator (Add, Get sp, Cst size)) in
+      let decr_sp size = Set (sp, BinaryOperator (Sub, Get sp, Cst size)) in
+      (* Traduit une suite de déclaration de variables *)
+      let rec tr_decl = function
+        | [] -> []
+        | (v, t, e) :: tl ->
+          begin match t, tr_expr e with
+          | Tab t, Cst n ->
+            let size = n * (sizeof t) in
+            stack_size := !stack_size + size;
+            add_var v (Ptr t);
+            Set (get_var v, Get sp) :: incr_sp size :: tr_decl tl
+          | t, e' ->
+            add_var v t;
+            Set (get_var v, e') :: tr_decl tl
+          end
+      in
 
-    (* Fonction de traduction d'une instruction *)
-    let rec tr_instr = function (* TODO : trouver autre chose que le flatten *)
-      | Ast.Putchar e -> [Putchar (tr_expr e)]
-      | Ast.Decl vars ->
-        List.map (fun (v, t, e) -> add_var v t; Set (get_var v, tr_expr e)) vars
-      | Ast.Set (v, e) -> [Set (get_var v, tr_expr e)]
-      | Ast.Write (ptr, offset, e) ->
-        let t = get_ptr_type Ast.(ptr.t) in
-        [Write (t, make_ptr t (tr_expr ptr) (tr_expr offset), tr_expr e)]
-      | Ast.If (c, b1, b2) -> [If (tr_expr c, tr_block b1, tr_block b2)]
-      | Ast.While (c, b) -> [While (tr_expr c, tr_block b)]
-      | Ast.Return e -> [Return (tr_expr e)]
-      | Ast.Expr e -> [Expr (tr_expr e)]
-      | Ast.Block b -> [Block (tr_block b)]
-    and tr_block b =
+      (* Fonction de traduction d'une instruction *)
+      let tr_instr = function (* TODO : trouver autre chose que le flatten *)
+        | Ast.Putchar e -> [Putchar (tr_expr e)]
+        | Ast.Decl vars -> tr_decl vars
+        | Ast.Set (v, e) -> [Set (get_var v, tr_expr e)]
+        | Ast.Write (ptr, offset, e) ->
+          let t = get_ptr_type Ast.(ptr.t) in
+          [Write (t, make_ptr t (tr_expr ptr) (tr_expr offset), tr_expr e)]
+        | Ast.If (c, b1, b2) -> [If (tr_expr c, tr_block b1, tr_block b2)]
+        | Ast.While (c, b) -> [While (tr_expr c, tr_block b)]
+        | Ast.Return e -> [Set (sp, Get "__init_sp"); Return (tr_expr e)]
+        | Ast.Expr e -> [Expr (tr_expr e)]
+        | Ast.Block b -> [Block (tr_block b)]
+      in
       enter_block ();
       let b' = List.flatten (List.map tr_instr b) in
       exit_block ();
-      b'
+      b' @ [decr_sp !stack_size]
     in
 
     List.iter (fun (v, _) -> Hashtbl.add env v v) Ast.(f.params);
-    let body = tr_block Ast.(f.body) in
+    let body = Set ("__init_sp", Get "__sp") :: tr_block Ast.(f.body) in
     {
       name = Ast.(f.name);
       params = Ast.(f.params);
-      locals = !local_variables;
+      locals = ("__init_sp", Int) :: !local_variables;
       return = Ast.(f.return);
       body = body;
     }
