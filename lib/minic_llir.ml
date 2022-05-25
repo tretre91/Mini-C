@@ -28,6 +28,7 @@ let tr_fdef func =
     match e with
     | Minic.Cst n -> Llir.Cst n :: next
     | Minic.BCst b -> Llir.Cst (if b then 1 else 0) :: next
+    | Minic.InitList (_, _) -> failwith "unreachable"
     | Minic.Get v -> Llir.Get (convert_var v) :: next
     | Minic.Read (t, ptr) -> tr_expr ptr (Llir.Load (Option.get (dtype_of_typ t)) :: next)
     | Minic.UnaryOperator (op, e) -> begin
@@ -48,6 +49,7 @@ let tr_fdef func =
     | Minic.Putchar e -> tr_expr e (Llir.Putchar :: next)
     | Minic.Set (v, e) -> tr_expr e (Llir.Set (convert_var v) :: next)
     | Minic.Write (t, p, e) -> tr_expr p (tr_expr e (Llir.Store (Option.get (dtype_of_typ t)) :: next))
+    | Minic.StaticMemcpy (dest, id, len) -> tr_expr dest (Llir.Cst 0 :: Llir.Cst len :: Llir.MemInit id :: next)
     | Minic.Expr e -> tr_expr e next
     | Minic.Return e -> tr_expr e [Llir.Return]
     | Minic.If (e, b1, b2) -> 
@@ -79,8 +81,13 @@ let tr_fdef func =
   }
 
 (* Traduction d'un programme de la 1ère représentation intermédiaire à la seconde *)
-let tr_prog prog = {
-  Llir.static = Minic.(prog.static);
-  Llir.globals = List.map (fun (v, t) -> v, Option.get (dtype_of_typ t)) Minic.(prog.globals);
-  Llir.functions = List.map tr_fdef Minic.(prog.functions);
-}
+let tr_prog prog = 
+  let static =
+      List.map (fun data -> None, data) Minic.(prog.persistent)
+    @ List.map (fun (addr, data) -> Some addr, data) Minic.(prog.static)
+  in
+  {
+    Llir.static = static;
+    Llir.globals = List.map (fun (v, t) -> v, Option.get (dtype_of_typ t)) Minic.(prog.globals);
+    Llir.functions = List.map tr_fdef Minic.(prog.functions);
+  }

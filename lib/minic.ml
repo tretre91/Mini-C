@@ -10,7 +10,7 @@ type typ = Ast.typ =
   | Bool
   | Void
   | Ptr of typ
-  | Tab of typ
+  | Tab of typ * int
 
 type binop = Ast.binop =
   | Add | Sub | Mult | Div | Mod
@@ -24,10 +24,18 @@ type unop = Ast.unop =
   | Not
   | BNot
 
+(** Type des données pouvant être calculées à la compilation (i.e les valeurs "constantes") *)
+type datatype =
+  | CInt of int
+  | CBool of bool
+  | CFloat of float
+  | CIList of datatype list
+
 (** Représentation des expressions, on retire les informations de type de l'AST *)
 type expr =
   | Cst of int
   | BCst of bool
+  | InitList of bool * expr list
   | UnaryOperator of unop * expr
   | BinaryOperator of binop * expr * expr
   | Get of string
@@ -39,6 +47,7 @@ type expr =
 type instr =
   | Putchar of expr
   | Set of string * expr
+  | StaticMemcpy of expr * int * int (* dest, id du segment, taille du segment *)
   | Write of typ * expr * expr
   | If of expr * block * block
   | While of expr * block
@@ -57,10 +66,68 @@ type fun_def = {
 }
 
 type prog = {
-  static: (int * int) list;
+  static: (int * string) list; (* Données mémoire *)
+  persistent: string list; (* Données persistentes, par ex : initialisateur des tableaux*)
   globals: (string * typ) list;
   functions: fun_def list;
 }
+
+(** Calcule la valeur d'une expression constante *)
+let calc_const_expr e =
+  let get_int = function
+    | CInt i -> i
+    | _ -> failwith "not an int"
+  in
+  let get_bool = function
+    | CBool b -> b
+    | _ -> failwith "not a bool"
+  in
+  let get_float = function
+    | CFloat f -> f
+    | _ -> failwith "not a float"
+  in
+  let get_ilist = function
+    | CIList l -> l
+    | _ -> failwith "not an initializer list"
+  in
+
+  let rec calc_const_expr = function
+    | Cst i -> CInt i
+    | BCst b -> CBool b
+    | UnaryOperator (op, e) ->
+      let e' = calc_const_expr e in
+      begin match op with
+        | Minus -> CInt (-(get_int e'))
+        | Not   -> CBool (get_bool e')
+        | BNot  -> CInt (lnot (get_int e'))
+      end
+    | BinaryOperator (op, e1, e2) ->
+      let e1' = calc_const_expr e1 in
+      let e2' = calc_const_expr e2 in
+      begin match op with
+        | Add  -> CInt (get_int e1' + get_int e2')
+        | Sub  -> CInt (get_int e1' - get_int e2')
+        | Mult -> CInt (get_int e1' * get_int e2')
+        | Div  -> CInt (get_int e1' / get_int e2')
+        | Mod  -> CInt (get_int e1' mod get_int e2')
+        | Eq   -> CBool (e1' = e2')
+        | Neq  -> CBool (e1' <> e2')
+        | Lt   -> CBool (e1' < e2')
+        | Leq  -> CBool (e1' <= e2')
+        | Gt   -> CBool (e1' > e2')
+        | Geq  -> CBool (e1' >= e2')
+        | And  -> CBool (get_bool e1' && get_bool e2')
+        | Or   -> CBool (get_bool e1' || get_bool e2')
+        | BAnd -> CInt (get_int e1' land get_int e2')
+        | BOr  -> CInt (get_int e1' lor get_int e2')
+        | BXor -> CInt (get_int e1' lxor get_int e2')
+        | Lsl  -> CInt (get_int e1' lsl get_int e2')
+        | Asr  -> CInt (get_int e1' asr get_int e2')
+      end
+    | InitList (const, l) when const -> CIList (List.map calc_const_expr l)
+    | _ -> failwith "Expression cannot be resolved at compile time"
+  in
+  calc_const_expr e
 
 (** Convertit la représentation sous forme d'ast en cette représentation
     intermédiaire *)
@@ -84,6 +151,27 @@ let prog_of_ast ast =
   let get_var v = Hashtbl.find env v in
   (* environnement contenant les fonctions ainsi que leur type *)
   let fun_env = Hashtbl.create 32 in
+  (* Initialiseurs de donneés qui seront placées en mémoire statique *)
+  let persistent_data = ref [] in
+  let next_data_id =
+    let id = ref 0 in
+    fun () ->
+      let i = !id in
+      incr id;
+      i
+  in
+
+  let buffer_of_initlist l =
+    let buffer = Buffer.create (8 * List.length l) in
+    let rec insert = function
+      | CInt i -> Buffer.add_int32_le buffer (Int32.of_int i)
+      | CBool b -> let i = if b then 1 else 0 in Buffer.add_int32_le buffer (Int32.of_int i)
+      | CFloat f -> Buffer.add_int32_le buffer (Int32.bits_of_float f)
+      | CIList l -> List.iter insert l
+    in
+    List.iter (fun e -> insert (calc_const_expr e)) l;
+    buffer
+  in
 
   (* Fonction de traduction d'un expression
       - traduit les noms de variables dans le cas Get v *)
@@ -91,6 +179,7 @@ let prog_of_ast ast =
     match Ast.(e.expr) with
     | Ast.Cst i -> Cst i
     | Ast.BCst b -> BCst b
+    | Ast.InitList l -> InitList (e.const, (List.map tr_expr l))
     | Ast.UnaryOperator (op, e) -> UnaryOperator (op, tr_expr e)
     | Ast.BinaryOperator (op, e1, e2) -> BinaryOperator (op, tr_expr e1, tr_expr e2)
     | Ast.Get v -> Get (get_var v)
@@ -140,11 +229,21 @@ let prog_of_ast ast =
         | [] -> []
         | (v, t, e) :: tl ->
           begin match t, tr_expr e with
-          | Tab t, Cst n ->
+          | Tab (t, n), InitList (const, l) ->
             let size = n * (sizeof t) in
             stack_size := !stack_size + size;
             add_var v (Ptr t);
-            Set (get_var v, Get sp) :: incr_sp size :: tr_decl tl
+            let p = get_var v in
+            let instr =
+              if const then
+                let buffer = buffer_of_initlist l in
+                let data = Buffer.contents buffer in
+                persistent_data := data :: !persistent_data;
+                [StaticMemcpy (Get (get_var v), next_data_id (), String.length data)]
+              else
+                List.mapi (fun i e -> Write (t, make_ptr t (Get p) (Cst i), e)) l
+            in
+            Set (get_var v, Get sp) :: incr_sp size :: instr @ tr_decl tl
           | t, e' ->
             add_var v t;
             Set (get_var v, e') :: tr_decl tl
@@ -190,23 +289,23 @@ let prog_of_ast ast =
         Hashtbl.add env v v;
         let e' = tr_expr e in
         begin match t, e' with
-        | Tab t, Cst n ->
+        | Tab (t, n), InitList (_, l) ->
           let offset = !static_offset in
+          let buffer = buffer_of_initlist l in
           static_offset := offset + n * (sizeof t);
-          (offset, n) :: static, (v, Ptr t) :: globals, funcs, Set (v, Cst offset)::init_instr
-        | _, _ -> static, (v, t) :: globals, funcs, Set (v, tr_expr e) :: init_instr
+          (offset, Buffer.contents buffer) :: static, (v, Ptr t) :: globals, funcs, Set (v, Cst offset)::init_instr
+        | _, _ -> static, (v, t) :: globals, funcs, Set (v, e') :: init_instr
         end
       | Ast.Function f -> static, globals, tr_fun f :: funcs, init_instr
     ) ([], [], [], []) ast
   in
-  (* on crée une fonction init qui contient les initialisations de variables globales 
-     TODO plus tard : initiliser directement ? appeler la fonction automatiquement ? *)
+  (* on crée une fonction init qui contient les initialisations de variables globales *)
   let init_fun = {
     name = "__init";
     params = [];
     locals = [];
     return = Void;
-    body = init_instr;
+    body = List.rev init_instr;
   }
   in
-  { static = static; globals = globals; functions = init_fun :: funcs }
+  { static; persistent = List.rev (!persistent_data); globals; functions = init_fun :: funcs }

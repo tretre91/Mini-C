@@ -24,6 +24,7 @@ let local_tee i = Instr ["local.tee"; (string_of_int i)]
 (* Instructions mémoire *)
 let load dtype = Instr [sprintf "%s.load" (string_of_typ dtype)]
 let store dtype = Instr [sprintf "%s.store" (string_of_typ dtype)]
+let mem_init id = Instr ["memory.init"; string_of_int id]
 
 (* Instructions numériques *)
 let i32_const i = Instr ["i32.const"; (string_of_int i)]
@@ -125,6 +126,7 @@ let tr_prog prog =
       | Set v -> set_var v
       | Load dtype -> load dtype
       | Store dtype -> store dtype
+      | MemInit id -> mem_init id
       | If (s1, s2) -> if_then_else (tr_seq s1) (tr_seq s2)
       | While (cond, seq) -> while_loop (tr_seq cond) (tr_seq seq)
       | Call f -> call f
@@ -137,7 +139,15 @@ let tr_prog prog =
     func fdef.name fdef.params fdef.locals fdef.return body
   in
   let globals = List.map (fun (v, t) -> Global (v, Mut, t, default_instr t)) Llir.(prog.globals) in
-  Module (Start "__init" :: Memory 2 :: Global ("__sp", Mut, I32, [i32_const 65536]) :: globals @ (List.map tr_fdef Llir.(prog.functions)))
+  let data = List.map (fun (addr, data) -> Data (addr, data)) Llir.(prog.static) in
+  Module (
+       Start "__init"
+    :: Memory 2
+    :: Global ("__sp", Mut, I32, [i32_const 65536])
+    :: data
+    @  globals
+    @  (List.map tr_fdef Llir.(prog.functions))
+  )
 
 (** Affichage d'un programme *)
 let print_prog channel p =
@@ -206,6 +216,12 @@ let print_prog channel p =
     | Start f -> printfi "(start $%s)\n" f
     (* Affichage d'une clause memory *)
     | Memory i -> printfi "(memory %d)\n" i
+    (* Affichage d'une clause data *)
+    | Data (addr, data) ->
+      begin match addr with
+      | None -> printfi "(data \"%s\")\n" data
+      | Some a -> printfi "(data (i32.const %d) \"%s\")\n" a data (* TODO : ne pas hardcoder le i32.const *)
+      end
     (* Affichage d'un commentaire *)
     | Comment c -> printfi ";; %s" c
   in

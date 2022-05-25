@@ -12,6 +12,7 @@ type expr =
   | Global of string * qualifier * dtype * seq
   | Start of string
   | Memory of int
+  | Data of int option * string
   | Comment of string
 and seq = expr list
 

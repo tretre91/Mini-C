@@ -7,7 +7,7 @@ let print_program (prog: prog) (out: out_channel) =
     | Bool -> "bool"
     | Void -> "void"
     | Ptr t -> string_of_typ t ^ "*"
-    | Tab t -> string_of_typ t ^ "[]"
+    | Tab (t, n) -> Printf.sprintf "%s[%d]" (string_of_typ t) n
   in
 
   let string_of_unop = function
@@ -41,6 +41,7 @@ let print_program (prog: prog) (out: out_channel) =
     match e.expr with
     | Cst n -> string_of_int n
     | BCst b -> string_of_bool b
+    | InitList l -> sprintf "{%s}" (string_of_expr_list l)
     | UnaryOperator(op, e) ->
       let s = string_of_expr e in
       string_of_unop op ^ s
@@ -52,6 +53,14 @@ let print_program (prog: prog) (out: out_channel) =
     | Get x -> x
     | Read (p, offset) -> sprintf "*(%s + %s)" (string_of_expr p) (string_of_expr offset)
     | Call (f, args) -> sprintf "%s(%s)" f (String.concat ", " (List.map string_of_expr args))
+  and string_of_expr_list l =
+    let rec aux l acc =
+      match l with
+      | [] -> acc
+      | [e] -> sprintf "%s, %s" acc (string_of_expr e)
+      | e::tl -> aux tl (sprintf "%s, %s" acc (string_of_expr e))
+    in
+    aux l ""
   in
 
 

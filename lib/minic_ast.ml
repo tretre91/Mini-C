@@ -4,7 +4,7 @@ type typ =
   | Bool
   | Void
   | Ptr of typ
-  | Tab of typ
+  | Tab of typ * int
 
 (** Types des opérations binaires *)
 type binop =
@@ -24,6 +24,7 @@ type unop =
 type expr_s =
   | Cst of int
   | BCst of bool
+  | InitList of expr list
   | UnaryOperator of unop * expr
   | BinaryOperator of binop * expr * expr
   | Get of string
@@ -32,6 +33,7 @@ type expr_s =
 (* Représentation d'une expression typée *)
 and expr = {
   t: typ;
+  const: bool;
   expr: expr_s
 }
 

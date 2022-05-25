@@ -1,5 +1,5 @@
 int GLOBAL_1 = 1;
-int GLOBAL_2 = 3 + GLOBAL_1;
+int GLOBAL_2 = 3 + 4;
 
 int IDEFAULT;
 

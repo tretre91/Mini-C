@@ -3,16 +3,31 @@
   open Lexing
   open Minic_ast
 
+  let make_expr e =
+    { t = Void; const = false; expr = e }
+  
   (* Valeur par défaut d'une variable d'un type donné *)
-  let default_value = function
+  let rec default_value = function
     | Int -> Cst 0
     | Bool -> BCst false
     | Void -> Cst 0      (* peu importe, sera détécté par le vérificateur de type *)
     | Ptr _ -> failwith "TODO : ptr default value, parser.mly"
-    | Tab _ -> failwith "TODO : tab default value, parser.mly"
+    | Tab (t, n) -> InitList (List.init n (fun _ -> make_expr (default_value t)))
 
-  let make_expr e =
-    { t = Void; expr = e }
+  (* Crée une initializer_list, ajuste la taille de la liste d'expressions à la taille
+     du tableau de destination *)
+  let make_ilist t n l =
+    let rec make_ilist_aux i l =
+      match l with
+      | _ when i >= n -> []
+      | [] -> make_expr (default_value t) :: make_ilist_aux (i + 1) l
+      | e::tl -> e :: make_ilist_aux (i + 1) tl
+    in
+    let expr = match l with
+      | None -> default_value (Tab (t, n))
+      | Some l' -> InitList (make_ilist_aux 0 l')
+    in
+    { t; const = false; expr }
 
   let ptr_offset id e =
     make_expr (BinaryOperator (Add, make_expr (Get id), e))
@@ -84,7 +99,8 @@ global_declaration:
 variable_decl:
 | t=typ vars=separated_list(COMMA, id=IDENT e=option(SET e=expression { e }) { id, e })
               { List.map (fun (id, e) -> id, t, Option.value e ~default:(make_expr (default_value t))) vars }
-| t=typ id=IDENT LBRACKET n=CST RBRACKET { [id, Tab(t), make_expr (Cst n)] }
+| t=typ id=IDENT LBRACKET n=CST RBRACKET l=option(SET BEGIN l=separated_list(COMMA, expression) END { l })
+              { [id, Tab (t, n), make_ilist t n l] }
 ;
 
 (* Indication de type. *)
@@ -92,7 +108,7 @@ typ:
 | INT   { Int }
 | BOOL  { Bool }
 | VOID  { Void }
-| t=typ LBRACKET RBRACKET { Tab t }
+| t=typ LBRACKET RBRACKET { Tab (t, -1) }
 ;
 
 (* Déclaration de fonction. *)

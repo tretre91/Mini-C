@@ -17,6 +17,7 @@ type instr =
   | Set of var
   | Load of Wasm.dtype
   | Store of Wasm.dtype
+  | MemInit of int
   | If of seq * seq
   | While of seq * seq (* Liste des instructions de la condition d'arrêt + corps de la boucle *)
   | Call of string
@@ -33,7 +34,7 @@ type fun_def = {
 }
 
 type prog = {
-  static: (int * int) list;
+  static: (int option * string) list;
   globals: (string * Wasm.dtype) list;
   functions: fun_def list;
 }

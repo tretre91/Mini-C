@@ -30,6 +30,13 @@ exception Bad_function_arg of string * string * typ * typ
 (** Exception levée lorsqu'une valeur de retour ne correspond pas au type de retour de la fonction *)
 exception Return_value_mismatch of typ * typ
 
+(** Exception levée lorsque la valeur d'une expression ne correspond pas à la valeur de l'initializer
+    list qui la contient *)
+exception Initializer_list_mismatch of typ * typ
+
+(** Exception levée lorsque la valeur donnée à une variable globale n'est pas une constante *)
+exception Not_const_initializer of string
+
 (** Type indiquant où l'on se trouve dans un programme *)
 type scope =
   | Global
@@ -43,7 +50,7 @@ let error =
     | Bool -> "bool"
     | Void -> "void"
     | Ptr t -> string_of_typ t ^ " ptr"
-    | Tab t -> string_of_typ t ^ "[]"
+    | Tab (t, n) -> Printf.sprintf "%s[%d]" (string_of_typ t) n
   in
   fun scope exn ->
     let prefix =
@@ -88,6 +95,10 @@ let error =
         Printf.sprintf "in call to %s, parameter '%s' expects an argument of type %s, got %s" f param stp ste
       | Return_value_mismatch (expected, got) ->
         Printf.sprintf "cannot return a value of type %s from a %s function" (string_of_typ expected) (string_of_typ got)
+      | Initializer_list_mismatch (expr_t, list_t) ->
+        Printf.sprintf "cannot use a value of type %s in an initializer list of type %s" (string_of_typ expr_t) (string_of_typ list_t)
+      | Not_const_initializer v ->
+        Printf.sprintf "value assigned to %s is not constant" v
       | Failure m -> m
       | e -> raise e
     in
@@ -108,42 +119,55 @@ let typecheck_program (prog: prog) =
   let type_expr env e =
     let rec type_expr e =
       match e.expr with
-      | Cst _ -> { e with t = Int }
-      | BCst _ -> { e with t = Bool }
+      | Cst _ -> { e with t = Int; const = true }
+      | BCst _ -> { e with t = Bool; const = true }
+      | InitList l ->
+        let t = e.t in
+        let cst = ref true in
+        let typed_l = List.map (fun e ->
+          let e' = type_expr e in
+          cst := !cst && e'.const;
+          if t = e'.t then
+            e'
+          else
+            raise (Initializer_list_mismatch (t, e'.t))
+        ) l
+        in
+        { t; const = !cst; expr = InitList typed_l }
       | UnaryOperator(op, e) ->
         let e' = type_expr e in
-        let expr = UnaryOperator(op, e') in
-        begin match op, e'.t with
-        | Minus, Int -> { t = Int; expr }
-        | Not, Bool  -> { t = Bool; expr }
-        | BNot, Int  -> { t = Int; expr }
-        | _, _ -> raise (Unary_operator_mismatch (op, e'.t))
-        end
+        let t = match op, e'.t with
+          | Minus, Int -> Int
+          | Not, Bool  -> Bool
+          | BNot, Int  -> Int
+          | _, _ -> raise (Unary_operator_mismatch (op, e'.t))
+        in
+        { t; const = e'.const; expr = UnaryOperator(op, e') }
       | BinaryOperator(op, e1, e2) ->
         let e1' = type_expr e1 in
         let e2' = type_expr e2 in
         let t1 = e1'.t in
         let t2 = e2'.t in
-        let expr = BinaryOperator(op, e1', e2') in
-        begin match op, t1, t2 with
-        | (Add | Sub | Mult | Div | Mod | BAnd | BOr | BXor | Lsl | Asr), Int, Int -> { t = Int; expr }
-        | (Lt | Leq | Gt | Geq), Int, Int -> { t = Bool; expr }
-        | (And | Or), Bool, Bool -> { t = Bool; expr }
-        | (Eq | Neq), _, _ when t1 = t2 -> { t = Bool; expr }
-        | _, _, _ -> raise (Binary_operator_mismatch (op, t1, t2))
-        end
+        let t = match op, t1, t2 with
+          | (Add | Sub | Mult | Div | Mod | BAnd | BOr | BXor | Lsl | Asr), Int, Int -> Int
+          | (Lt | Leq | Gt | Geq), Int, Int -> Bool
+          | (And | Or), Bool, Bool -> Bool
+          | (Eq | Neq), _, _ when t1 = t2 -> Bool
+          | _, _, _ -> raise (Binary_operator_mismatch (op, t1, t2))
+        in
+        { t; const = e1'.const && e2'.const; expr = BinaryOperator(op, e1', e2') }
       | Get(x) ->
-        begin match Env.find_opt x env.variables with
-        | Some (Tab t) -> { t = Ptr t; expr = Get x }
-        | Some t -> { t; expr = Get x }
+        let t =  match Env.find_opt x env.variables with
+        | Some (Tab (t, _)) -> Ptr t
+        | Some t -> t
         | None -> raise (Undefined_variable x)
-        end
+        in
+        { t; const = false; expr = Get x }
       | Read(ptr, offset) ->
         let ptr' = type_expr ptr in
         let offset' = type_expr offset in
         begin match ptr'.t, offset'.t with
-          | Ptr t, Int -> { t; expr = Read (ptr', offset') }
-          (* | _ -> raise (Not_a_pointer e'.t) *) (* TODO *)
+          | Ptr t, Int -> { t; const = false; expr = Read (ptr', offset') }
           | _, _ -> failwith "Using normal type as a pointer (TODO)"
         end
       | Call(f, args) -> type_call f args
@@ -167,7 +191,7 @@ let typecheck_program (prog: prog) =
             e' :: typecheck_args params' args'
       in
       let args' = typecheck_args func.params args in
-      { t = func.return; expr = Call (f, args') }
+      { t = func.return; const = false; expr = Call (f, args') }
     in
     type_expr e
   in
@@ -282,8 +306,11 @@ let typecheck_program (prog: prog) =
     match decl with
     | Variable d -> begin
       try
-        let env', d' = typecheck_var_decl (env, vars) d in
-        env', Variable d'
+        let env', (v, t, e) = typecheck_var_decl (env, vars) d in
+        if not e.const then
+          raise (Not_const_initializer v)
+        else
+          env', Variable (v, t, e)
       with
         e -> error Global e
       end
