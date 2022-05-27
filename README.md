@@ -5,10 +5,7 @@ Projet de compilation d'un langage impératif type c vers WebAssembly.
 ---
 
 - [Mini-C](#mini-c)
-  - [Fonctionnalités](#fonctionnalits)
-    - [Compilateur](#compilateur)
-    - [Interpréteur](#interprteur)
-    - [Afficheur](#afficheur)
+  - [Compilateur](#compilateur)
   - [Syntaxe du langage](#syntaxe-du-langage)
     - [Commentaires](#commentaires)
     - [Types](#types)
@@ -19,10 +16,7 @@ Projet de compilation d'un langage impératif type c vers WebAssembly.
     - [Expressions](#expressions)
   - [Tests](#tests)
 
-
-## Fonctionnalités
-
-### Compilateur
+## Compilateur
 
 Utiliser la commande
 ```
@@ -35,28 +29,6 @@ minic prog.mnc -o prog.wat
 ```
 
 Le format de sortie est le [format textuel](https://developer.mozilla.org/en-US/docs/WebAssembly/Understanding_the_text_format) de WebAssembly, le fichier produit peut ensuite être compilé vers le format binaire en utilisant par exemple [`wat2wasm`](https://github.com/WebAssembly/wabt#wabt-the-webassembly-binary-toolkit).
-
-### Interpréteur
-
-Un programme Mini-C peut être interprété en utilisant la fonction `interpret_program : prog -> int` du module `Libminic.Minic_interpreter`. La fonction d'interprétation exécute la fonction main du programme si elle existe et renvoie sa valeur de retour.
-
-Pour interpréter un programme utiliser l'option `-i` :
-```
-minic prog.mnc -i
-```
-
-### Afficheur
-
-Il est possible de reconstruire un fichier source à partir d'un arbre de syntaxe à l'aide de la fonction `print_program : prog -> out_channel -> unit` du module `Libminic.Minic_display` qui traduit un ast en code source qui sera écrit dans une variable de type `out_channel`.
-
-Pour reconstruire un programme on peut utiliser l'option `--display` :
-```
-minic prog.mnc --display
-```
-Sans argument le code source est envoyé sur la sortie standard, on peut également donner un fichier en argument :
-```
-minic prog.mnc --display -o code.out
-```
 
 ## Syntaxe du langage
 
@@ -82,9 +54,11 @@ Les types disponibles sont `int`, `bool` et `void` (seulement pour les fonctions
 Une déclaration de variables peut être de l'une des formes suivantes :
 
 ```c
-int a;               // a aura une valeur par défaut
+int a;                   // a aura une valeur par défaut
 bool b = true;
-int a = 1, b, c = 2; // déclare 3 variables de type int, b aura une valeur par défaut
+int a = 1, b, c = 2;     // déclare 3 variables de type int, b aura une valeur par défaut
+bool tab[4];             // déclare un tableau de 4 booléensayant une valeur par défaut
+int tab[3] = { 1, 2, 3 } // déclare un tableau de 3 entiers qui sera initialisé avec les valeurs 1, 2, 3
 ```
 
 Les variables globales sont définies n'importe où en dehors d'une fonction, elles sont accessibles partout dans le programme après leur déclaration.
@@ -163,48 +137,40 @@ Les instructions supportées sont :
 
 Une expression peut être sous une des formes suivantes :
 
-| expression                    | interpréteur | compilateur | exemple                   |
-| ----------------------------- | :----------: | :---------: | ------------------------- |
-| **Littéraux**                 |              |             |                           |
-| constante entière             | X            | X           | `-5`                      |
-| constante booléenne           | X            | X           | `true`, `false`           |
-| **Opérations arithmétiques**  |              |             |                           |
-| addition                      | X            | X           | `1 + -5`                  |
-| soustraction                  | X            | X           | `1 - 5`                   |
-| multiplication                | X            | X           | `(1 + 1) * 2`             |
-| division                      | X            | X           | `10 / 2`                  |
-| modulo                        | X            | X           | `18 % 3`                  |
-| **Opérations de comparaison** |              |             |                           |
-| égalité                       | X            | X           | `1 == 1`, `true != false` |
-| inégalité stricte             | X            | X           | `1 < 2`, `2 > 1`          |
-| inégalité large               | X            | X           | `1 <= 1`, `3 <= 4`        |
-| **Opérations logiques**       |              |             |                           |
-| négation                      | X            | X           | `!true`                   |
-| et                            | X            | X           | `3 < 4 && true`           |
-| ou                            | X            | X           | `false \|\| 1 == 2`       |
-| **Opérations bit-à-bit**      |              |             |                           |
-| négation                      | X            | X           | `~1`                      |
-| et                            | X            | X           | `1 + 2 & 3`               |
-| ou                            | X            | X           | `64 \| 63`                |
-| ou exclusif                   | X            | X           | `127 ^ 255`               |
-| **Décalages**                 |              |             |                           |
-| vers la gauche (logique)      | X            | X           | `1 << 64`                 |
-| vers la droite (arithmétique) | X            | X           | `64 >> 2`                 |
-| **Autres**                    |              |             |                           |
-| variable                      | X            | X           | `x`                       |
-| appel de fonction             | X            | X           | `foo(5, false)`           |
+| expression                    | exemple                   |
+| ----------------------------- | ------------------------- |
+| **Littéraux**                 |                           |
+| constante entière             | `-5`                      |
+| constante booléenne           | `true`, `false`           |
+| **Opérations arithmétiques**  |                           |
+| addition                      | `1 + -5`                  |
+| soustraction                  | `1 - 5`                   |
+| multiplication                | `(1 + 1) * 2`             |
+| division                      | `10 / 2`                  |
+| modulo                        | `18 % 3`                  |
+| **Opérations de comparaison** |                           |
+| égalité                       | `1 == 1`, `true != false` |
+| inégalité stricte             | `1 < 2`, `2 > 1`          |
+| inégalité large               | `1 <= 1`, `3 <= 4`        |
+| **Opérations logiques**       |                           |
+| négation                      | `!true`                   |
+| et                            | `3 < 4 && true`           |
+| ou                            | `false \|\| 1 == 2`       |
+| **Opérations bit-à-bit**      |                           |
+| négation                      | `~1`                      |
+| et                            | `1 + 2 & 3`               |
+| ou                            | `64 \| 63`                |
+| ou exclusif                   | `127 ^ 255`               |
+| **Décalages**                 |                           |
+| vers la gauche (logique)      | `1 << 64`                 |
+| vers la droite (arithmétique) | `64 >> 2`                 |
+| **Autres**                    |                           |
+| variable                      | `x`                       |
+| appel de fonction             | `foo(5, false)`           |
 
 ## Tests
 
-Les tests du vérificateur de type, de l'interpréteur et de l'afficheur sont dans les sous dossiers typechecker, interpreter et display du dossier test.
-- Le dossier test/typechecker contient un fichier de test par aspect du langage traité, par ordre chronologique
-- Pour tester l'afficheur on vérifie qu'un programme de base et le même programme reconstruit à partir de son ast produise les mêmes résultats à l'interpretation
-- Pour tester l'interpréteur on interprète plusieurs fichiers et on compare leur sortie et leur code de retour avec le contenu du fichier interpreter.expected
-
-Les tests de l'afficheur et de l'interpréteur sont lancés lorsque le projet est compilé, ils n'affichent rien si il  n'y a pas d'erreur.
-
-Les tests du vérificateur de type peuvent être lancés avec la commande
-
+Les tests sont dans le dossier test, un fichier par aspect du langage, triés par ordre chronologique. Ils peuvent être lancés avec la commande :
 ```
 dune runtest
 ```

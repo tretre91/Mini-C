@@ -3,21 +3,8 @@ open Cmdliner
 
 type args = {
   input_file: string;
-  interpret: bool;
-  display: bool;
   output_file: string option;
 }
-
-(** Reconstruit et affiche un programme minic reconstruit à partir de l'ast
-    d'un programme donné *)
-let display_ast ast args =
-  match args.output_file with
-  | None -> Minic_display.print_program ast stdout
-  | Some f -> begin
-      let out_channel = open_out f in
-      Minic_display.print_program ast out_channel;
-      close_out out_channel;
-    end
 
 (** Compile un prgramme minic en module WebAssembly *)
 let compile ast args =
@@ -33,11 +20,9 @@ let compile ast args =
   close file
 
 (** Fonction principale *)
-let main input_file output_file interpret display =
+let main input_file output_file =
   let args = {
     input_file;
-    interpret;
-    display;
     output_file;
   }
   in
@@ -46,13 +31,7 @@ let main input_file output_file interpret display =
   let ast = Minic_parser.program Minic_lexer.token lexbuf in
   close_in in_channel;
   let typed_ast = Minic_typechecker.typecheck_program ast in
-  if args.display then
-    display_ast ast args
-  else if args.interpret then
-    (* exit (Minic_interpreter.interpret_program ast) *)
-    failwith "TODO"
-  else
-    compile typed_ast args
+  compile typed_ast args
 
 let command_line =
   let output_file =
@@ -63,15 +42,7 @@ let command_line =
     let doc = "The source file" in
     Arg.(required & pos 0 (some file) None & info [] ~docv:"SOURCE" ~doc)
   in
-  let interpret: bool Term.t =
-    let doc = "Interpret the minic program" in
-    Arg.(value & flag & info ["i"; "interpret"] ~doc)
-  in
-  let display =
-    let doc = "Reconstruct the source file from the ast" in
-    Arg.(value & flag & info ["display"] ~doc)
-  in
-  let args_t = Term.(const main $ input_file $ output_file $ interpret $ display) in
+  let args_t = Term.(const main $ input_file $ output_file) in
   let doc = "Compiler targeting WebAssembly !" in
   let info = Cmd.info "minic" ~version:"0.0.1" ~doc in
   Cmd.v info args_t

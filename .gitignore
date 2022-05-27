@@ -5,3 +5,7 @@ node_modules/
 
 README
 *.wspc
+
+/*.mnc
+/*.wat
+/*.wasm
