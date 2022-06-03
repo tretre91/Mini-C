@@ -7,34 +7,16 @@
     { t = Void; const = false; expr = e }
   
   (* Valeur par défaut d'une variable d'un type donné *)
-  let rec default_value = function
-    | Int -> Cst 0
-    | Bool -> BCst false
-    | Void -> Cst 0      (* peu importe, sera détécté par le vérificateur de type *)
+  let default_value = function
+    | Integer t -> Cst (CInteger (t, Int64.zero))
+    | Bool -> Cst (CBool false)
+    | Void -> Cst (CBool true)      (* peu importe, sera détécté par le vérificateur de type *)
     | Ptr _ -> failwith "TODO : ptr default value, parser.mly"
-    | Tab (t, n) -> InitList (List.init n (fun _ -> make_expr (default_value t)))
-
-  (* Crée une initializer_list, ajuste la taille de la liste d'expressions à la taille
-     du tableau de destination *)
-  let make_ilist t n l =
-    let rec make_ilist_aux i l =
-      match l with
-      | _ when i >= n -> []
-      | [] -> make_expr (default_value t) :: make_ilist_aux (i + 1) l
-      | e::tl -> e :: make_ilist_aux (i + 1) tl
-    in
-    let expr = match l with
-      | None -> default_value (Tab (t, n))
-      | Some l' -> InitList (make_ilist_aux 0 l')
-    in
-    { t; const = false; expr }
-
-  let ptr_offset id e =
-    make_expr (BinaryOperator (Add, make_expr (Get id), e))
+    | Tab (_, _) -> InitList []
   
   (* Traduit une boucle for en boucle while *)
   let for_loop init cond incr body =
-    let condition = Option.value cond ~default:(make_expr (BCst true)) in
+    let condition = Option.value cond ~default:(make_expr (Cst (CBool true))) in
     let increment = List.map (fun (id, e) -> Set(id, e)) incr in
     let body = body @ increment in
     Block (init @ [While (condition, body)])
@@ -42,13 +24,12 @@
 %}
 
 (* Déclaration des lexèmes *)
-%token <int> CST
-%token <bool> BOOL_CST
+%token <Minic_ast.constant> CST
 %token <string> IDENT
 %token LPAR RPAR BEGIN END LBRACKET RBRACKET
 %token RETURN SET SEMI COMMA
-%token IF ELSE WHILE FOR PUTCHAR
-%token INT BOOL VOID
+%token IF ELSE WHILE FOR
+%token CHAR INT BOOL VOID
 %token ADD SUB MUL DIV MOD
 %token EQ NEQ
 %token LT LEQ GT GEQ
@@ -99,16 +80,20 @@ global_declaration:
 variable_decl:
 | t=typ vars=separated_list(COMMA, id=IDENT e=option(SET e=expression { e }) { id, e })
               { List.map (fun (id, e) -> id, t, Option.value e ~default:(make_expr (default_value t))) vars }
-| t=typ id=IDENT LBRACKET n=CST RBRACKET l=option(SET BEGIN l=separated_list(COMMA, expression) END { l })
-              { [id, Tab (t, n), make_ilist t n l] }
+| t=typ id=IDENT LBRACKET n=expression RBRACKET l=option(SET BEGIN l=separated_list(COMMA, expression) END { l })
+              {
+                let l = Option.value ~default:[] l in
+                [id, Tab (t, n), { t; const = false; expr = InitList l }]
+              }
 ;
 
 (* Indication de type. *)
 typ:
-| INT   { Int }
+| CHAR  { Integer Char }
+| INT   { Integer Int }
 | BOOL  { Bool }
 | VOID  { Void }
-| t=typ LBRACKET RBRACKET { Tab (t, -1) }
+| t=typ LBRACKET RBRACKET { Tab (t, make_expr (Cst (CInteger (Int, Int64.minus_one)))) }
 ;
 
 (* Déclaration de fonction. *)
@@ -141,7 +126,6 @@ subscript:
 
 (* Instructions. *)
 instruction:
-| PUTCHAR LPAR e=expression RPAR SEMI            { Putchar(e) }
 | v=variable_decl SEMI                           { Decl(v) }
 | a=assignement SEMI                             { let id, e = a in Set(id, e) }
 | s=subscript SET e=expression SEMI              { let id, i = s in Write (make_expr (Get id), i, e) }
@@ -171,8 +155,7 @@ assignement:
 (* Expressions. *)
 expression:
 | LPAR e=expression RPAR            { e }
-| n=CST                             { make_expr (Cst(n)) }
-| b=BOOL_CST                        { make_expr (BCst(b)) }
+| c=CST                             { make_expr (Cst(c)) }
 | SUB e=expression                  { make_expr (UnaryOperator(Minus, e)) }
 | ADD e=expression                  { e }
 | NOT e=expression                  { make_expr (UnaryOperator(Not, e)) }

@@ -1,9 +1,12 @@
+module Ast = Minic_ast
+
 (** Associe à un type minic un type de données wasm *)
 let dtype_of_typ = function
   | Minic.Void -> None
-  | Minic.Int | Minic.Bool -> Some Wasm.I32
-  | Ptr _ -> Some Wasm.I32
-  | Tab _ -> failwith "unreachable"
+  (* | Ast.Integer Long -> Some Wasm.I64 *)
+  | Minic.Integer _ | Minic.Bool -> Some Wasm.I32
+  | Minic.Ptr _ -> Some Wasm.I32
+  | Minic.Tab _ -> failwith "unreachable"
 
 (* Traduction d'une définition de fonction *)
 let tr_fdef func =
@@ -23,22 +26,53 @@ let tr_fdef func =
       | Some i -> Llir.Param i
       | None -> Global v
   in
+  let constant_of_const_expr c =
+    let get_integer c =
+      match Minic.(c.value) with
+      | Minic.Integral v -> v
+      | _ -> failwith "not an integer"
+    in
+    match Minic.(c.t) with
+    | Integer (Char | Int) | Bool -> Llir.I32Cst (Int64.to_int32 (get_integer c))
+    | _ -> failwith __LOC__
+  in
+  let datatype_of_typ : (Minic.typ -> Llir.datatype) = function
+    | Integer Char -> Int8
+    | Integer Int | Bool -> Int32
+    | _ -> failwith "TODO"
+  in
+  let make_op t op =
+    let dt = Option.get (dtype_of_typ t) in
+    Llir.Op (dt, op)
+  in
   (* Traduit une expression *)
-  let rec tr_expr (e:Minic.expr) next =
+  let rec tr_expr e next =
     match e with
-    | Minic.Cst n -> Llir.Cst n :: next
-    | Minic.BCst b -> Llir.Cst (if b then 1 else 0) :: next
+    | Minic.Cst c -> Llir.Cst (constant_of_const_expr c) :: next
+    | Minic.Cast (e, from, to_) -> tr_expr e (Llir.Cast (datatype_of_typ from, datatype_of_typ to_) :: next)
     | Minic.InitList (_, _) -> failwith "unreachable"
     | Minic.Get v -> Llir.Get (convert_var v) :: next
     | Minic.Read (t, ptr) -> tr_expr ptr (Llir.Load (Option.get (dtype_of_typ t)) :: next)
-    | Minic.UnaryOperator (op, e) -> begin
+    | Minic.UnaryOperator (t, op, e) -> begin
       match op with
-      | Minic.Minus -> Llir.Cst 0 :: tr_expr e (Op Llir.Sub :: next)
-      | Minic.Not -> tr_expr e (Op Llir.Not :: next)
-      | Minic.BNot -> tr_expr e (Llir.Cst (-1) :: Llir.Op Llir.BXor :: next)
+      | Ast.Minus ->
+        let zero = match t with
+        (* | Integer Long -> Llir.I64Cst Int64.zero *)
+        | Integer _ -> Llir.I32Cst Int32.zero
+        | _ -> failwith __LOC__
+        in
+        Llir.Cst zero :: tr_expr e (make_op t Llir.Sub :: next)
+      | Ast.Not -> tr_expr e (Op (I32, Llir.Not) :: next)
+      | Ast.BNot ->
+        let minus_one = match t with
+        (* | Integer Long -> Llir.I64Cst Int64.minus_one *)
+        | Integer _ -> Llir.I32Cst Int32.minus_one
+        | _ -> failwith __LOC__
+        in
+        tr_expr e (Llir.Cst minus_one :: make_op t Llir.BXor :: next)
       end
-    | Minic.BinaryOperator (op, e1, e2) ->
-      tr_expr e1 (tr_expr e2 (Llir.Op (Llir.num_op_of_binop op) :: next))
+    | Minic.BinaryOperator (t, op, e1, e2) ->
+      tr_expr e1 (tr_expr e2 (make_op t (Llir.num_op_of_binop op) :: next))
     | Minic.Call (f, args) -> tr_args args (Llir.Call f :: next)
   and tr_args args next =
     List.fold_left (fun next arg -> tr_expr arg next) next args
@@ -46,10 +80,12 @@ let tr_fdef func =
   (* Traduit une instruction *)
   let rec tr_instr i next =
     match i with
-    | Minic.Putchar e -> tr_expr e (Llir.Putchar :: next)
     | Minic.Set (v, e) -> tr_expr e (Llir.Set (convert_var v) :: next)
     | Minic.Write (t, p, e) -> tr_expr p (tr_expr e (Llir.Store (Option.get (dtype_of_typ t)) :: next))
-    | Minic.StaticMemcpy (dest, id, len) -> tr_expr dest (Llir.Cst 0 :: Llir.Cst len :: Llir.MemInit id :: next)
+    | Minic.StaticMemcpy (dest, id, len) ->
+      let offset = Llir.Cst (Llir.I32Cst 0l) in
+      let length = Llir.Cst (Llir.I32Cst (Int32.of_int len)) in
+      tr_expr dest (offset :: length :: Llir.MemInit id :: next)
     | Minic.Expr e -> tr_expr e next
     | Minic.Return e -> tr_expr e [Llir.Return]
     | Minic.If (e, b1, b2) -> 
@@ -68,7 +104,8 @@ let tr_fdef func =
   in
   let end_seq = match Minic.(func.return) with (* TODO : retirer dans les cas non-void *)
     | Void -> [Llir.Return]
-    | Int | Bool -> [Llir.Cst 0; Llir.Return]
+    (* | Integer Long -> [Llir.Cst (Llir.I64Cst 0L); Llir.Return] *)
+    | Integer _ | Bool -> [Llir.Cst (Llir.I32Cst 0l); Llir.Return]
     | _ -> []
   in
   let code = tr_block Minic.(func.body) end_seq in

@@ -37,6 +37,12 @@ exception Initializer_list_mismatch of typ * typ
 (** Exception levée lorsque la valeur donnée à une variable globale n'est pas une constante *)
 exception Not_const_initializer of string
 
+(** Exception levée lorsqu'une conversion entre 2 types n'est pas valide *)
+exception Bad_cast of typ * typ
+
+(** Exception levée lorsqu'une variable qui n'est pas un pointeur est utilisée comme un pointeur *)
+exception Not_a_pointer of typ
+
 (** Type indiquant où l'on se trouve dans un programme *)
 type scope =
   | Global
@@ -45,12 +51,16 @@ type scope =
 (** Lève une exception qui contient un message d'erreur indiquant le nom de la
     fonction où l'erreur a eu lieu. *)
 let error =
+  let string_of_integral_type = function
+    | Char -> "char"
+    | Int  -> "int"
+  in
   let rec string_of_typ = function
-    | Int -> "int"
+    | Integer t -> string_of_integral_type t
     | Bool -> "bool"
     | Void -> "void"
     | Ptr t -> string_of_typ t ^ " ptr"
-    | Tab (t, n) -> Printf.sprintf "%s[%d]" (string_of_typ t) n
+    | Tab (t, _) -> Printf.sprintf "%s[]" (string_of_typ t)
   in
   fun scope exn ->
     let prefix =
@@ -99,6 +109,10 @@ let error =
         Printf.sprintf "cannot use a value of type %s in an initializer list of type %s" (string_of_typ expr_t) (string_of_typ list_t)
       | Not_const_initializer v ->
         Printf.sprintf "value assigned to %s is not constant" v
+      | Bad_cast (t1, t2) ->
+        Printf.sprintf "cannot convert a value of type %s to type %s" (string_of_typ t1) (string_of_typ t2)
+      | Not_a_pointer t ->
+        Printf.sprintf "variable of type %s cannot be accessed as a pointer" (string_of_typ t)
       | Failure m -> m
       | e -> raise e
     in
@@ -111,49 +125,104 @@ type environment = {
   variables: typ Env.t
 }
 
+let get_cast e t =
+  match e.t, t with
+  | _, _ when e.t = t -> e
+  | Integer _, Integer _
+  | Bool, Integer _
+  | Integer _, Bool -> { t; const = e.const; expr = Cast (e, e.t, t) }
+  | _, _ -> raise (Bad_cast (e.t, t))
+
+let get_integer e =
+  match e.t with
+  | Integer _ -> e
+  | Bool -> get_cast e (Integer Int)
+  | _ -> failwith "expression is not an integer"
+
+let is_integral = function
+  | Integer _ -> true
+  | _ -> false
+
+let unify t1 t2 =
+  let unify_integral_type t1 t2 =
+    match t1, t2 with
+    | _, _ -> Int
+    (* TODO : ajouter les cas des entiers longs *)
+  in
+  match t1, t2 with
+  | Integer t1', Integer t2' -> Integer (unify_integral_type t1' t2')
+  | _, _ when t1 = t2 -> t1
+  | Bool, _ -> t2
+  | _, Bool -> t1
+  | _, _ -> failwith "types cannot be unified"
+
 (** Vérification du bon typage d'un programme.
     Renvoie l'ast typé *)
 let typecheck_program (prog: prog) =
+  let type_constant = function
+    | CInteger (t, _) -> Integer t
+    | CBool _ -> Bool
+    | CIList _ -> failwith "never reached, initializer lists are not treated as constants in this step"
+  in
   (* Vérification du bon typage et calcul du type d'une expression dans un
      environnement donné. *)
   let type_expr env e =
     let rec type_expr e =
       match e.expr with
-      | Cst _ -> { e with t = Int; const = true }
-      | BCst _ -> { e with t = Bool; const = true }
+      | Cst c -> { e with t = type_constant c; const = true }
+      | Cast (expr, _, to_) ->
+        let e' = type_expr expr in
+        { e with const = e'.const; expr = Cast (e', e'.t, to_) }
       | InitList l ->
         let t = e.t in
         let cst = ref true in
         let typed_l = List.map (fun e ->
           let e' = type_expr e in
           cst := !cst && e'.const;
-          if t = e'.t then
-            e'
-          else
-            raise (Initializer_list_mismatch (t, e'.t))
+          try get_cast e' t
+          with Bad_cast _ -> raise (Initializer_list_mismatch (t, e'.t))
         ) l
         in
         { t; const = !cst; expr = InitList typed_l }
       | UnaryOperator(op, e) ->
-        let e' = type_expr e in
-        let t = match op, e'.t with
-          | Minus, Int -> Int
-          | Not, Bool  -> Bool
-          | BNot, Int  -> Int
-          | _, _ -> raise (Unary_operator_mismatch (op, e'.t))
-        in
-        { t; const = e'.const; expr = UnaryOperator(op, e') }
+        let e = type_expr e in
+        begin
+          try
+            let e' = match op with
+              | Minus ->
+                let t = unify e.t (Integer Int) in
+                get_cast e t
+              | Not  -> get_cast e Bool
+              | BNot -> get_integer e
+            in
+            { t = e'.t; const = e'.const; expr = UnaryOperator(op, e') }
+          with
+            Failure _ | Bad_cast _ -> raise (Unary_operator_mismatch (op, e.t))
+        end
       | BinaryOperator(op, e1, e2) ->
-        let e1' = type_expr e1 in
-        let e2' = type_expr e2 in
-        let t1 = e1'.t in
-        let t2 = e2'.t in
-        let t = match op, t1, t2 with
-          | (Add | Sub | Mult | Div | Mod | BAnd | BOr | BXor | Lsl | Asr), Int, Int -> Int
-          | (Lt | Leq | Gt | Geq), Int, Int -> Bool
-          | (And | Or), Bool, Bool -> Bool
-          | (Eq | Neq), _, _ when t1 = t2 -> Bool
-          | _, _, _ -> raise (Binary_operator_mismatch (op, t1, t2))
+        let e1 = type_expr e1 in
+        let e2 = type_expr e2 in
+        let e1', e2', t = try
+          match op with
+          | Add | Sub | Mult | Div | Mod | BAnd | BOr | BXor ->
+            let t = unify e1.t e2.t in
+            let e1' = get_cast e1 t in
+            let e2' = get_cast e2 t in
+            e1', e2', t
+          | Lsl | Asr when is_integral e1.t && is_integral e2.t ->
+            e1, e2, e1.t
+          | Lt | Leq | Gt | Geq | Eq | Neq ->
+            let t = unify e1.t e2.t in
+            let e1' = get_cast e1 t in
+            let e2' = get_cast e2 t in
+            e1', e2', t
+          | And | Or ->
+            let e1' = get_cast e1 Bool in
+            let e2' = get_cast e2 Bool in
+            e1', e2', Bool
+          | _ -> failwith ""
+        with
+          | _ -> raise (Binary_operator_mismatch (op, e1.t, e2.t))
         in
         { t; const = e1'.const && e2'.const; expr = BinaryOperator(op, e1', e2') }
       | Get(x) ->
@@ -166,9 +235,11 @@ let typecheck_program (prog: prog) =
       | Read(ptr, offset) ->
         let ptr' = type_expr ptr in
         let offset' = type_expr offset in
-        begin match ptr'.t, offset'.t with
-          | Ptr t, Int -> { t; const = false; expr = Read (ptr', offset') }
-          | _, _ -> failwith "Using normal type as a pointer (TODO)"
+        begin match ptr'.t with
+          | Ptr t ->
+            let offset' = get_integer offset' in
+            { t; const = false; expr = Read (ptr', offset') }
+          | _ -> raise (Not_a_pointer ptr'.t)
         end
       | Call(f, args) -> type_call f args
     (* Vérification du bon typage d'un appel de fonction *)
@@ -185,10 +256,10 @@ let typecheck_program (prog: prog) =
         | _, [] -> failwith ("missing arguments in call to " ^ func.name)
         | (p, tp)::params', e::args' ->
           let e' = type_expr e in
-          if e'.t <> tp then
-            raise (Bad_function_arg (func.name, p, tp, e'.t))
-          else
-            e' :: typecheck_args params' args'
+          try
+            get_cast e' tp :: typecheck_args params' args'
+          with
+            Bad_cast _ -> raise (Bad_function_arg (func.name, p, tp, e'.t))
       in
       let args' = typecheck_args func.params args in
       { t = func.return; const = false; expr = Call (f, args') }
@@ -206,15 +277,20 @@ let typecheck_program (prog: prog) =
       let te = e'.t in
       match tv, te with
       | Void, _ -> raise (Void_variable x)
-      | Tab _, _ ->
-        let env' = { env with variables = Env.add x tv env.variables } in
+      | Tab (t, n), _ ->
+        let n' = get_integer (type_expr env n) in
+        let t' = Tab (t, n') in
+        let env' = { env with variables = Env.add x t' env.variables } in
         let local_env' = Env.add x () local_vars in
-        (env', local_env'), (x, tv, e')
-      | _, _ when tv = te -> 
-        let env' = { env with variables = Env.add x tv env.variables } in
-        let local_env' = Env.add x () local_vars in
-        (env', local_env'), (x, tv, e')
-      | _, _ -> raise (Bad_assignement (tv, x, te))        
+        (env', local_env'), (x, t', e')
+      | _, _ ->
+        try
+          let e' = get_cast e' tv in
+          let env' = { env with variables = Env.add x tv env.variables } in
+          let local_env' = Env.add x () local_vars in
+          (env', local_env'), (x, tv, e')
+        with
+          Bad_cast _ -> raise (Bad_assignement (tv, x, te))        
   in
 
   let typecheck_function env (fdef: fun_def) =
@@ -226,56 +302,67 @@ let typecheck_program (prog: prog) =
       List.map (typecheck_instr env local_vars) b
     (* Vérification du bon typage d'une instruction *)
     and typecheck_instr env local_vars = function
-      | Putchar(e) ->
-          let e' = type_expr !env e in
-          if e'.t = Int then
-            Putchar e'
-          else
-            failwith "putchar expects an integer (ascii code) argument"
       | Decl(l) ->
-          let (env', local_vars'), l' = List.fold_left_map typecheck_var_decl (!env, !local_vars) l in
-          env := env';
-          local_vars := local_vars';
-          Decl l'
+        let (env', local_vars'), l' = List.fold_left_map typecheck_var_decl (!env, !local_vars) l in
+        env := env';
+        local_vars := local_vars';
+        Decl l'
       | Set(x, e) ->
         let e' = type_expr !env e in
         let t_var = match Env.find_opt x !env.variables with
           | Some t -> t
           | None -> raise (Undefined_variable x)
         in
-        if t_var = e'.t then
-          Set (x, e')
-        else
-          raise (Bad_assignement (t_var, x, e'.t))
+        begin
+          try Set (x, get_cast e' t_var)
+          with Bad_cast _ -> raise (Bad_assignement (t_var, x, e'.t))
+        end
       | Write (ptr, offset, e) ->
         let ptr' = type_expr !env ptr in
         let offset' = type_expr !env offset in
         let e' = type_expr !env e in
-        begin match ptr'.t, offset'.t, e'.t with
-        | Ptr t, Int, te when t = te -> Write (ptr', offset', e')
-        | _, _, _ -> failwith "TODO : bad mem assignement, typechecker.ml"
+        begin try
+          let offset' = get_integer offset' in
+          match ptr'.t with
+          | Ptr t ->
+            let e' = get_cast e' t in
+            Write (ptr', offset', e')
+          | _ -> raise (Not_a_pointer ptr'.t)
+        with
+          Bad_cast (from, to_) -> raise (Bad_assignement (to_, "[ptr]", from))
         end
       | If(cond, t, f) ->
           let cond' = type_expr !env cond in
-          if cond'.t <> Bool then
-            raise (Bad_condition ("an if", cond'.t))
-          else
-            let t' = typecheck_block !env t in
-            let f' = typecheck_block !env f in
-            If (cond', t', f')
+          begin
+            try
+              let cond'' = get_cast cond' Bool in
+              let t' = typecheck_block !env t in
+              let f' = typecheck_block !env f in
+              If (cond'', t', f')
+            with
+              Bad_cast _ -> raise (Bad_condition ("an if", cond'.t))
+          end
       | While(cond, b) ->
         let cond' = type_expr !env cond in
-        if cond'.t <> Bool then
-          raise (Bad_condition ("a loop", cond'.t))
-        else
-          let b' = typecheck_block !env b in
-          While (cond', b')
+        begin
+          try
+            let cond'' = get_cast cond' Bool in
+            let b' = typecheck_block !env b in
+            While (cond'', b')
+          with
+            Bad_cast _ -> raise (Bad_condition ("a while loop", cond'.t))
+        end
       | Return(e) ->
         let e' = type_expr !env e in
         begin match fdef.return, e'.t with
         | Void, _ -> failwith "cannot return a value from a void function"
-        | t1, t2 when t1 <> t2 -> raise (Return_value_mismatch (t1, t2))
-        | _, _ -> returns := true; Return (e')
+        | t1, t2 ->
+          try
+            let e'' = get_cast e' fdef.return in
+            returns := true;
+            Return (e'')
+          with
+            Bad_cast _ -> raise (Return_value_mismatch (t1, t2))
         end
       | Expr(e) -> Expr (type_expr !env e)
       | Block(b) -> Block (typecheck_block !env b)

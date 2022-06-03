@@ -10,9 +10,24 @@ type num_op =
   | BAnd | BOr | BXor
   | Lsl | Asr
 
+type constant =
+  | I32Cst of Int32.t
+  | I64Cst of Int64.t
+  | F32Cst of float
+  | F64Cst of float
+
+type datatype =
+  | Int8
+  | Int16
+  | Int32
+  | Int64
+  | Float32
+  | Float64
+
 type instr =
-  | Cst of int
-  | Op of num_op
+  | Cst of constant
+  | Cast of datatype * datatype
+  | Op of Wasm.dtype * num_op
   | Get of var
   | Set of var
   | Load of Wasm.dtype
@@ -22,7 +37,6 @@ type instr =
   | While of seq * seq (* Liste des instructions de la condition d'arrêt + corps de la boucle *)
   | Call of string
   | Return
-  | Putchar
 and seq = instr list
 
 type fun_def = {
@@ -39,7 +53,7 @@ type prog = {
   functions: fun_def list;
 }
 
-let num_op_of_binop (op: Minic.binop) : num_op =
+let num_op_of_binop (op: Minic_ast.binop) : num_op =
   match op with
   | Add  -> Add
   | Sub  -> Sub

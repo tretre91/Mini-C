@@ -3,15 +3,14 @@
   open Lexing
   open Minic_parser
 
-  (* Fonction auxiliaire pour rassembler les mots-clés 
-     À COMPLÉTER
-   *)
+  (* Fonction auxiliaire pour rassembler les mots-clés *)
   let keyword_or_ident =
     let h = Hashtbl.create 17 in
     List.iter (fun (s, k) -> Hashtbl.add h s k)
       [ "return",   RETURN;
-        "true",     BOOL_CST true;
-        "false",    BOOL_CST false;
+        "true",     CST (CBool true);
+        "false",    CST (CBool false);
+        "char",     CHAR;
         "int",      INT;
         "bool",     BOOL;
         "void",     VOID;
@@ -19,12 +18,24 @@
         "else",     ELSE;
         "while",    WHILE;
         "for",      FOR;
-        "putchar",  PUTCHAR;
       ] ;
     fun s ->
       try  Hashtbl.find h s
       with Not_found -> IDENT(s)
   
+  let char_of_string s =
+    let len = String.length s in
+    match s.[0] with
+    | '\\' ->
+      let code = match s.[1] with
+        | 'x' -> int_of_string ("0x" ^ (String.sub s 2 (len - 2)))
+        | '0'..'7' -> int_of_string ("0o" ^ (String.sub s 1 (len - 1)))
+        | 'n' -> 10
+        | _ -> failwith "TODO : special escape characters"
+      in
+      Char.chr code
+    | _ as c -> c
+
   (* Quitte le programme et affiche un message d'erreur indiquant l'emplacement de l'erreur *)
   let error message pos =
     Printf.fprintf stderr "error at (%d, %d): %s" pos.pos_lnum (pos.pos_cnum - pos.pos_bol) message;
@@ -33,6 +44,15 @@
 
 (* Règles auxiliaires *)
 let digit = ['0'-'9']
+let octal = ['0'-'7']
+let hex = ['a'-'f''A'-'F''0'-'9']
+
+let valid_escapes = "\\" ['n'] (* TODO *)
+let hex_char = "\\x" (hex | hex hex)
+let oct_char = "\\" (octal | octal octal | octal octal octal)
+let chr = (_ | hex_char | oct_char | valid_escapes)
+let char = "'" chr "'"
+
 let number = digit+
 let alpha = ['a'-'z' 'A'-'Z']
 let ident = alpha (alpha | '_' | digit)*
@@ -50,8 +70,10 @@ rule token = parse
       { token lexbuf }
   | "/*"
       { multiline_comment (lexeme_start_p lexbuf) lexbuf }
+  | "'" (chr as c) "'"
+      { CST (CInteger (Char, Int64.of_int (int_of_char (char_of_string c)))) }
   | number as n
-      { CST(int_of_string n) }
+      { CST (CInteger (Int, Int64.of_int (int_of_string n))) }
   | ident as id
       { keyword_or_ident id }
   | ";"

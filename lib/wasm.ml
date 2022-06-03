@@ -1,4 +1,4 @@
-type dtype = I32 | I64 | F32 | F64
+type dtype = I8 | I16 | I32 | I64 | F32 | F64
 
 type qualifier = Mut | Const
 
@@ -21,6 +21,7 @@ let string_of_typ = function
   | I64 -> "i64"
   | F32 -> "f32"
   | F64 -> "f64"
+  | _ -> failwith "other datatypes are only used internally"
 
 let string_of_qualifier = function
   | Mut -> "mut"

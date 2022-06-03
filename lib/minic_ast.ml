@@ -1,10 +1,12 @@
 (** Représentation des types. *)
-type typ =
+type integral_type =
+  | Char
   | Int
-  | Bool
-  | Void
-  | Ptr of typ
-  | Tab of typ * int
+
+type constant =
+  | CInteger of integral_type * Int64.t
+  | CBool of bool
+  | CIList of constant list
 
 (** Types des opérations binaires *)
 type binop =
@@ -20,17 +22,23 @@ type unop =
   | Not
   | BNot
 
+type typ =
+  | Integer of integral_type
+  | Bool
+  | Void
+  | Ptr of typ
+  | Tab of typ * expr
 (** Représentation des expressions. *)
-type expr_s =
-  | Cst of int
-  | BCst of bool
+and expr_s =
+  | Cst of constant
+  | Cast of expr * typ * typ
   | InitList of expr list
   | UnaryOperator of unop * expr
   | BinaryOperator of binop * expr * expr
   | Get of string
   | Read of expr * expr (* adresse * offset *)
   | Call of string * expr list
-(* Représentation d'une expression typée *)
+(** Représentation d'une expression typée *)
 and expr = {
   t: typ;
   const: bool;
@@ -42,7 +50,6 @@ type var_decl = string * typ * expr
 
 (** Représentation des instructions. *)
 type instr =
-  | Putchar of expr
   | Decl of var_decl list
   | Set of string * expr
   | Write of expr * expr * expr

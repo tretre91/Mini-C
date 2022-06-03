@@ -3,49 +3,37 @@
     sous forme de pile *)
 
 module Ast = Minic_ast
+open Minic_ast
 
-(* Redéfinition de certains types de l'AST *)
-type typ = Ast.typ =
-  | Int
+type typ =
+  | Integer of integral_type
   | Bool
   | Void
   | Ptr of typ
   | Tab of typ * int
-
-type binop = Ast.binop =
-  | Add | Sub | Mult | Div | Mod
-  | Eq | Neq | Lt | Leq | Gt | Geq
-  | And | Or
-  | BAnd | BOr | BXor
-  | Lsl | Asr
-
-type unop = Ast.unop =
-  | Minus
-  | Not
-  | BNot
-
-(** Type des données pouvant être calculées à la compilation (i.e les valeurs "constantes") *)
-type datatype =
-  | CInt of int
-  | CBool of bool
-  | CFloat of float
-  | CIList of datatype list
-
 (** Représentation des expressions, on retire les informations de type de l'AST *)
-type expr =
-  | Cst of int
-  | BCst of bool
+and expr =
+  | Cst of const_expr
+  | Cast of expr * typ * typ
   | InitList of bool * expr list
-  | UnaryOperator of unop * expr
-  | BinaryOperator of binop * expr * expr
+  | UnaryOperator of typ * unop * expr
+  | BinaryOperator of typ * binop * expr * expr
   | Get of string
   | Read of typ * expr
   | Call of string * expr list
+(** Type des valeurs connues à la compilation *)
+and const_value =
+  | Integral of Int64.t
+  | Floating of float
+  | List of const_expr list
+and const_expr = {
+  t: typ;
+  value: const_value;
+}
 
 (** Représentation des instructions, on n'utilise plus le constructeur de déclaration
     de variable dans cette représentation *)
 type instr =
-  | Putchar of expr
   | Set of string * expr
   | StaticMemcpy of expr * int * int (* dest, id du segment, taille du segment *)
   | Write of typ * expr * expr
@@ -72,59 +60,90 @@ type prog = {
   functions: fun_def list;
 }
 
+let todo ?msg location =
+  let msg = match msg with
+  | None -> ""
+  | Some s -> Printf.sprintf " %s." s
+  in
+  failwith (Printf.sprintf "TODO :%s %s" msg location)
+
+(* Donne la taille d'un objet en octets *)
+let sizeof = function
+  | Integer Char -> 1
+  | Integer Int | Bool | Ptr _ -> 4
+  | _ -> failwith "sizeof"
+
+let rec default_value t =
+  match t with
+  | Bool
+  | Integer _ -> Cst { t; value = Integral Int64.zero }
+  | Void -> failwith __LOC__ (* unreachable *)
+  | Ptr _ -> failwith __LOC__ (* unreachable *)
+  | Tab (t, n) -> InitList (true, List.init n (fun _ -> default_value t))
+  
+let rec make_initlist t n l =
+  match l with
+  | _ when n = 0 -> []
+  | [] -> default_value t :: make_initlist t (n - 1) l
+  | e::tl -> e :: make_initlist t (n - 1) tl
+
 (** Calcule la valeur d'une expression constante *)
 let calc_const_expr e =
-  let get_int = function
-    | CInt i -> i
-    | _ -> failwith "not an int"
+  let cast_const_expr e target =
+    let { t; value = v } = e in
+    match t, target, v with
+    | Integer _, Integer _, Integral v ->
+      let shift = 64 - 8 * (sizeof target) in
+      let v' = Int64.shift_right_logical (Int64.shift_left v shift) shift in
+      { t = target; value = Integral v' }
+    | Bool, Integer _, Integral b ->
+      { t = target; value = Integral (if b = 0L then 0L else 1L) }
+    | Integer _, Bool, Integral v ->
+      { t = target; value = Integral (if v = 0L then 0L else 1L) }
+    | _ -> failwith ""
   in
-  let get_bool = function
-    | CBool b -> b
-    | _ -> failwith "not a bool"
-  in
-  let get_float = function
-    | CFloat f -> f
-    | _ -> failwith "not a float"
-  in
-  let get_ilist = function
-    | CIList l -> l
-    | _ -> failwith "not an initializer list"
-  in
-
   let rec calc_const_expr = function
-    | Cst i -> CInt i
-    | BCst b -> CBool b
-    | UnaryOperator (op, e) ->
+    | Cst c -> c
+    | Cast (e, _, to_) -> cast_const_expr (calc_const_expr e) to_
+    | UnaryOperator (_, op, e) ->
       let e' = calc_const_expr e in
-      begin match op with
-        | Minus -> CInt (-(get_int e'))
-        | Not   -> CBool (get_bool e')
-        | BNot  -> CInt (lnot (get_int e'))
+      begin match op, e'.t, e'.value with
+        | Minus, Integer _, Integral v -> { e' with value = Integral (Int64.neg v) }
+        | Not, Bool, Integral b   -> { e' with value = Integral (if b = 1L then 0L else 1L) }
+        | BNot, Integer _, Integral v  -> { e' with value = Integral (Int64.lognot v) }
+        | _, _, _ -> todo ~msg:"unop const expr" __LOC__
       end
-    | BinaryOperator (op, e1, e2) ->
+    | BinaryOperator (_, op, e1, e2) ->
+      let int64_of_bool b = if b then 1L else 0L in
       let e1' = calc_const_expr e1 in
       let e2' = calc_const_expr e2 in
-      begin match op with
-        | Add  -> CInt (get_int e1' + get_int e2')
-        | Sub  -> CInt (get_int e1' - get_int e2')
-        | Mult -> CInt (get_int e1' * get_int e2')
-        | Div  -> CInt (get_int e1' / get_int e2')
-        | Mod  -> CInt (get_int e1' mod get_int e2')
-        | Eq   -> CBool (e1' = e2')
-        | Neq  -> CBool (e1' <> e2')
-        | Lt   -> CBool (e1' < e2')
-        | Leq  -> CBool (e1' <= e2')
-        | Gt   -> CBool (e1' > e2')
-        | Geq  -> CBool (e1' >= e2')
-        | And  -> CBool (get_bool e1' && get_bool e2')
-        | Or   -> CBool (get_bool e1' || get_bool e2')
-        | BAnd -> CInt (get_int e1' land get_int e2')
-        | BOr  -> CInt (get_int e1' lor get_int e2')
-        | BXor -> CInt (get_int e1' lxor get_int e2')
-        | Lsl  -> CInt (get_int e1' lsl get_int e2')
-        | Asr  -> CInt (get_int e1' asr get_int e2')
+      let { t = t1; value = v1 } = e1' in
+      let { t = t2; value = v2 } = e2' in
+      assert (t1 = t2); (* TODO : remove *)
+      begin match op, v1, v2 with
+        | Add, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.add i1 i2) }
+        | Sub, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.sub i1 i2) }
+        | Mult, Integral i1, Integral i2 -> { t = t1; value = Integral (Int64.mul i1 i2) }
+        | Div, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.div i1 i2) }
+        | Mod, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.rem i1 i2) }
+        | Eq, _, _ -> { t = Bool; value = Integral (int64_of_bool (v1 = v2)) }
+        | Neq, _, _ -> { t = Bool; value = Integral (int64_of_bool (v1 <> v2)) }
+        | Lt, _, _ -> { t = Bool; value = Integral (int64_of_bool (v1 < v2)) }
+        | Leq, _, _ -> { t = Bool; value = Integral (int64_of_bool (v1 <= v2)) }
+        | Gt, _, _ -> { t = Bool; value = Integral (int64_of_bool (v1 > v2)) }
+        | Geq, _, _ -> { t = Bool; value = Integral (int64_of_bool (v1 >= v2)) }
+        | And, Integral b1, Integral b2  -> { t = Bool; value = Integral (int64_of_bool (b1 = 1L && b2 = 1L)) }
+        | Or, Integral b1, Integral b2   -> { t = Bool; value = Integral (int64_of_bool (b1 = 1L || b2 = 1L)) }
+        | BAnd, Integral i1, Integral i2 -> { t = t1; value = Integral (Int64.logand i1 i2) }
+        | BOr, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.logor i1 i2) }
+        | BXor, Integral i1, Integral i2 -> { t = t1; value = Integral (Int64.logxor i1 i2) }
+        | Lsl, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.shift_left i1 (Int64.to_int i2)) }
+        | Asr, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.shift_right i1 (Int64.to_int i2)) }
+        | _, _, _ -> todo ~msg:"binop const expr" __LOC__
       end
-    | InitList (const, l) when const -> CIList (List.map calc_const_expr l)
+    | InitList (const, l) when const ->
+      (* le type n'est plus utilisé à cette étape dans le cas d'une initializer list *)
+      { t = Tab(Void, -1); value = List (List.map calc_const_expr l) }
     | _ -> failwith "Expression cannot be resolved at compile time"
   in
   calc_const_expr e
@@ -132,15 +151,16 @@ let calc_const_expr e =
 (** Convertit la représentation sous forme d'ast en cette représentation
     intermédiaire *)
 let prog_of_ast ast =
-  (* Donne la taille d'un objet en octets *)
-  let sizeof = function
-    | Int | Bool | Ptr _ -> 4
-    | _ -> failwith "sizeof"
+  let rec const_expr_of_constant = function
+    | CInteger (t, v)  -> { t = Integer t; value = Integral v }
+    | CBool b  -> { t = Bool; value = Integral (if b then 1L else 0L) }
+    | CIList l -> { t = Tab(Void, -1); value = List (List.map const_expr_of_constant l)}
   in
   (* Crée une expression correspondant à un accès mémoire *)
   let make_ptr t base offset =
-    BinaryOperator (Add, base, BinaryOperator (Mult, Cst (sizeof t), offset))
+    BinaryOperator (Integer Int, Add, base, BinaryOperator (Integer Int, Mult, Cst { t = Integer Int; value = Integral (Int64.of_int (sizeof t)) }, offset))
   in
+  let make_size s = Cst { t = Integer Int; value = Integral (Int64.of_int s) } in
   (* Récupère le type d'un pointeur *)
   let get_ptr_type = function
     | Ptr t -> t
@@ -163,29 +183,42 @@ let prog_of_ast ast =
 
   let buffer_of_initlist l =
     let buffer = Buffer.create (8 * List.length l) in
-    let rec insert = function
-      | CInt i -> Buffer.add_int32_le buffer (Int32.of_int i)
-      | CBool b -> let i = if b then 1 else 0 in Buffer.add_int32_le buffer (Int32.of_int i)
-      | CFloat f -> Buffer.add_int32_le buffer (Int32.bits_of_float f)
-      | CIList l -> List.iter insert l
+    let rec insert e =
+      match e.t, e.value with
+      | Integer Char, Integral v -> Buffer.add_int8 buffer (Int64.to_int v)
+      | (Integer Int | Bool), Integral v -> Buffer.add_int32_le buffer (Int64.to_int32 v)
+      | _, List l -> List.iter insert l
+      | _, _ -> todo ~msg:"buffer" __LOC__
     in
     List.iter (fun e -> insert (calc_const_expr e)) l;
     buffer
   in
 
-  (* Fonction de traduction d'un expression
+  (* Fonction de traduction d'un type *)
+  let rec tr_typ = function
+    | Ast.Integer t -> Integer t
+    | Ast.Bool -> Bool
+    | Ast.Void -> Void
+    | Ast.Ptr t -> Ptr (tr_typ t)
+    | Tab (t, n) ->
+      let n' = calc_const_expr (tr_expr n) in
+      let { t = _; value = v } = n' in
+      match v with
+      | Integral i -> Tab (tr_typ t, Int64.to_int i)
+      | _ -> failwith __LOC__ (* unreachable *)
+  (* Fonction de traduction d'une expression
       - traduit les noms de variables dans le cas Get v *)
-  let rec tr_expr e =
+  and tr_expr e =
     match Ast.(e.expr) with
-    | Ast.Cst i -> Cst i
-    | Ast.BCst b -> BCst b
+    | Ast.Cst c -> Cst (const_expr_of_constant c)
+    | Ast.Cast (expr, from, to_) -> Cast (tr_expr expr, tr_typ from, tr_typ to_)
     | Ast.InitList l -> InitList (e.const, (List.map tr_expr l))
-    | Ast.UnaryOperator (op, e) -> UnaryOperator (op, tr_expr e)
-    | Ast.BinaryOperator (op, e1, e2) -> BinaryOperator (op, tr_expr e1, tr_expr e2)
+    | Ast.UnaryOperator (op, e) -> UnaryOperator (tr_typ e.t, op, tr_expr e)
+    | Ast.BinaryOperator (op, e1, e2) -> BinaryOperator (tr_typ e1.t, op, tr_expr e1, tr_expr e2)
     | Ast.Get v -> Get (get_var v)
     | Ast.Call (f, args) -> Call (f, List.map tr_expr args)
     | Ast.Read (ptr, offset) ->
-      let t = get_ptr_type Ast.(ptr.t) in
+      let t = get_ptr_type (tr_typ Ast.(ptr.t)) in
       Read (t, make_ptr t (tr_expr ptr) (tr_expr offset))
   in
 
@@ -222,14 +255,15 @@ let prog_of_ast ast =
     let rec tr_block b =
       let stack_size = ref 0 in
       let sp = "__sp" in
-      let incr_sp size = Set (sp, BinaryOperator (Add, Get sp, Cst size)) in
-      let decr_sp size = Set (sp, BinaryOperator (Sub, Get sp, Cst size)) in
+      let incr_sp size = Set (sp, BinaryOperator (Integer Int, Add, Get sp, make_size size)) in
+      let decr_sp size = Set (sp, BinaryOperator (Integer Int, Sub, Get sp, make_size size)) in
       (* Traduit une suite de déclaration de variables *)
       let rec tr_decl = function
         | [] -> []
         | (v, t, e) :: tl ->
-          begin match t, tr_expr e with
+          begin match tr_typ t, tr_expr e with
           | Tab (t, n), InitList (const, l) ->
+            let l = make_initlist t n l in
             let size = n * (sizeof t) in
             stack_size := !stack_size + size;
             add_var v (Ptr t);
@@ -241,7 +275,7 @@ let prog_of_ast ast =
                 persistent_data := data :: !persistent_data;
                 [StaticMemcpy (Get (get_var v), next_data_id (), String.length data)]
               else
-                List.mapi (fun i e -> Write (t, make_ptr t (Get p) (Cst i), e)) l
+                List.mapi (fun i e -> Write (t, make_ptr t (Get p) (make_size i), e)) l
             in
             Set (get_var v, Get sp) :: incr_sp size :: instr @ tr_decl tl
           | t, e' ->
@@ -249,14 +283,12 @@ let prog_of_ast ast =
             Set (get_var v, e') :: tr_decl tl
           end
       in
-
       (* Fonction de traduction d'une instruction *)
       let tr_instr = function (* TODO : trouver autre chose que le flatten *)
-        | Ast.Putchar e -> [Putchar (tr_expr e)]
         | Ast.Decl vars -> tr_decl vars
         | Ast.Set (v, e) -> [Set (get_var v, tr_expr e)]
         | Ast.Write (ptr, offset, e) ->
-          let t = get_ptr_type Ast.(ptr.t) in
+          let t = get_ptr_type (tr_typ Ast.(ptr.t)) in
           [Write (t, make_ptr t (tr_expr ptr) (tr_expr offset), tr_expr e)]
         | Ast.If (c, b1, b2) -> [If (tr_expr c, tr_block b1, tr_block b2)]
         | Ast.While (c, b) -> [While (tr_expr c, tr_block b)]
@@ -274,9 +306,9 @@ let prog_of_ast ast =
     let body = Set ("__init_sp", Get "__sp") :: tr_block Ast.(f.body) in
     {
       name = Ast.(f.name);
-      params = Ast.(f.params);
-      locals = ("__init_sp", Int) :: !local_variables;
-      return = Ast.(f.return);
+      params = List.map (fun (v, t) -> v, tr_typ t) Ast.(f.params);
+      locals = ("__init_sp", Integer Int) :: !local_variables;
+      return = tr_typ Ast.(f.return);
       body = body;
     }
   in
@@ -288,13 +320,15 @@ let prog_of_ast ast =
       | Ast.Variable (v, t, e) ->
         Hashtbl.add env v v;
         let e' = tr_expr e in
-        begin match t, e' with
+        let t' = tr_typ t in
+        begin match t', e' with
         | Tab (t, n), InitList (_, l) ->
+          let l' = make_initlist t n l in
           let offset = !static_offset in
-          let buffer = buffer_of_initlist l in
+          let buffer = buffer_of_initlist l' in
           static_offset := offset + n * (sizeof t);
-          (offset, Buffer.contents buffer) :: static, (v, Ptr t) :: globals, funcs, Set (v, Cst offset)::init_instr
-        | _, _ -> static, (v, t) :: globals, funcs, Set (v, e') :: init_instr
+          (offset, Buffer.contents buffer) :: static, (v, Ptr t) :: globals, funcs, Set (v, make_size offset)::init_instr
+        | _, _ -> static, (v, t') :: globals, funcs, Set (v, e') :: init_instr
         end
       | Ast.Function f -> static, globals, tr_fun f :: funcs, init_instr
     ) ([], [], [], []) ast

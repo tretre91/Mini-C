@@ -27,7 +27,44 @@ let store dtype = Instr [sprintf "%s.store" (string_of_typ dtype)]
 let mem_init id = Instr ["memory.init"; string_of_int id]
 
 (* Instructions numériques *)
-let i32_const i = Instr ["i32.const"; (string_of_int i)]
+let const = function
+  | Llir.I32Cst i -> Instr ["i32.const"; Int32.to_string i]
+  | Llir.I64Cst i -> Instr ["i64.const"; Int64.to_string i]
+  | Llir.F32Cst f -> Instr ["f32.const"; string_of_float f]
+  | Llir.F64Cst f -> Instr ["f64.const"; string_of_float f]
+
+let cast from t =
+  let instr = Llir.(match from, t with
+  | Int8, (Int16 | Int32) -> ["i32.extend8_s"]
+  | Int8, Int64 -> ["i64.extend8_s"]
+  | Int8, Float32 -> ["i32.extend8_s\nf32.convert_i32_s"] (* TODO :( *)
+  | Int8, Float64 -> ["i32.extend8_s\nf64.convert_i32_s"]
+  | Int16, Int32 -> ["i32.extend16_s"]
+  | Int16, Int64 -> ["i64.extend16_s"]
+  | Int16, Float32 -> ["i32.extend16_s\nf32.convert_i32_s"] (* TODO :( *)
+  | Int16, Float64 -> ["i32.extend16_s\nf64.convert_i32_s"]
+  | Int32, Int8 -> []
+  | Int32, Int16 -> []
+  | Int32, Int64 -> ["i64.extend_i32_s"]
+  | Int32, Float32 -> ["f32.convert_i32_s"]
+  | Int32, Float64 -> ["f64.convert_i32_s"]
+  | Int64, (Int8 | Int16 | Int32) -> ["i32.wrap_i64"]
+  | Int64, Float32 -> ["f32.convert_i64_s"]
+  | Int64, Float64 -> ["f64.convert_i64_s"]
+  | Float32, Int8 -> failwith __LOC__
+  | Float32, Int16 -> failwith __LOC__
+  | Float32, Int32 -> ["i32.trunc_f32_s"]
+  | Float32, Int64 -> ["i64.trunc_f32_s"]
+  | Float32, Float64 -> ["f64.promote_f32"]
+  | Float64, Int8 -> failwith __LOC__
+  | Float64, Int16 -> failwith __LOC__
+  | Float64, Int32 -> ["i32.trunc_f64_s"]
+  | Float64, Int64 -> ["i64.trunc_f64_s"]
+  | Float64, Float32 -> ["f32.demote_f64"]
+  | _, _ when from = t -> []
+  | _, _ -> failwith "unreachable"
+  ) in
+  Instr instr
 
 let add dtype = Instr [sprintf "%s.add" (string_of_typ dtype)]
 let sub dtype = Instr [sprintf "%s.sub" (string_of_typ dtype)]
@@ -82,8 +119,11 @@ let func name params locals res body =
   Function (name, params, res, locals, body)
 
 let default_instr = function
-  | I32 -> [i32_const 0]
-  | _ -> failwith "TODO"
+  | I32 -> [const (Llir.I32Cst 0l)]
+  | I64 -> [const (Llir.I64Cst 0L)]
+  | F32 -> [const (Llir.F32Cst 0.0)]
+  | F64 -> [const (Llir.F64Cst 0.0)]
+  | _   -> failwith __LOC__ (* unreachable *)
 
 (** Traduction d'un programme *)
 let tr_prog prog =
@@ -100,28 +140,29 @@ let tr_prog prog =
       | Llir.Global v -> global_set v
     in
     let tr_num_op = Llir.(function
-      | Add -> add I32
-      | Sub -> sub I32
-      | Mul -> mul I32
-      | Div -> div I32
-      | Mod -> rem I32
-      | Eq  -> eq I32
-      | Eqz -> eqz I32
-      | Neq -> neq I32
-      | Lt  -> lt I32
-      | Leq -> le I32
-      | Gt  -> gt I32
-      | Geq -> ge I32
-      | And | BAnd -> band I32
-      | Or | BOr -> bor I32
-      | Not -> eqz I32
-      | BXor -> bxor I32
-      | Lsl -> shl I32
-      | Asr -> shr_s I32
+      | Add -> add
+      | Sub -> sub
+      | Mul -> mul
+      | Div -> div
+      | Mod -> rem
+      | Eq  -> eq
+      | Eqz -> eqz
+      | Neq -> neq
+      | Lt  -> lt
+      | Leq -> le
+      | Gt  -> gt
+      | Geq -> ge
+      | And | BAnd -> band
+      | Or | BOr -> bor
+      | Not -> eqz
+      | BXor -> bxor
+      | Lsl -> shl
+      | Asr -> shr_s
     ) in
     let rec tr_instr = function
-      | Llir.Cst i -> i32_const i
-      | Llir.Op op -> tr_num_op op
+      | Llir.Cst i -> const i
+      | Llir.Cast (from, to_) -> cast from to_
+      | Llir.Op (dt, op) -> (tr_num_op op) dt
       | Get v -> get_var v
       | Set v -> set_var v
       | Load dtype -> load dtype
@@ -131,7 +172,6 @@ let tr_prog prog =
       | While (cond, seq) -> while_loop (tr_seq cond) (tr_seq seq)
       | Call f -> call f
       | Return -> return
-      | Putchar -> failwith "TODO"
     and tr_seq seq =
       List.map tr_instr seq
     in
@@ -143,7 +183,7 @@ let tr_prog prog =
   Module (
        Start "__init"
     :: Memory 2
-    :: Global ("__sp", Mut, I32, [i32_const 65536])
+    :: Global ("__sp", Mut, I32, [const (Llir.I32Cst 65536l)])
     :: data
     @  globals
     @  (List.map tr_fdef Llir.(prog.functions))
@@ -165,6 +205,7 @@ let print_prog channel p =
   (* Affiche une expression *)
   and print_expr = function
     (* Affichage d'une instruction *)
+    | Instr [] -> ()
     | Instr atoms ->
       printfi "%a\n" (print_string_list " ") atoms;
     (* Affichage d'un module *)
