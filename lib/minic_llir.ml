@@ -8,6 +8,16 @@ let dtype_of_typ = function
   | Minic.Ptr _ -> Some Wasm.I32
   | Minic.Tab _ -> failwith "unreachable"
 
+(** Associe à un type minic un type de données wasm (prend en compte les i8 et I16)
+    utilisé dans le cas des instructions mémoire par exemple *)
+let extended_dtype_of_typ = function
+  | Minic.Void -> None
+  (* | Ast.Integer Long -> Some Wasm.I64 *)
+  | Minic.Integer Ast.Char -> Some Wasm.I8
+  | Minic.Integer Ast.Int | Minic.Bool -> Some Wasm.I32
+  | Minic.Ptr _ -> Some Wasm.I32
+  | Minic.Tab _ -> failwith "unreachable"
+
 (* Traduction d'une définition de fonction *)
 let tr_fdef func =
   (* Associe une portée (globale, locale, ou paramètre) à une variable *)
@@ -42,7 +52,7 @@ let tr_fdef func =
     | _ -> failwith "TODO"
   in
   let make_op t op =
-    let dt = Option.get (dtype_of_typ t) in
+    let dt = Option.get (extended_dtype_of_typ t) in
     Llir.Op (dt, op)
   in
   (* Traduit une expression *)
@@ -52,7 +62,7 @@ let tr_fdef func =
     | Minic.Cast (e, from, to_) -> tr_expr e (Llir.Cast (datatype_of_typ from, datatype_of_typ to_) :: next)
     | Minic.InitList (_, _) -> failwith "unreachable"
     | Minic.Get v -> Llir.Get (convert_var v) :: next
-    | Minic.Read (t, ptr) -> tr_expr ptr (Llir.Load (Option.get (dtype_of_typ t)) :: next)
+    | Minic.Read (t, ptr) -> tr_expr ptr (Llir.Load (Option.get (extended_dtype_of_typ t)) :: next)
     | Minic.UnaryOperator (t, op, e) -> begin
       match op with
       | Ast.Minus ->
@@ -81,7 +91,7 @@ let tr_fdef func =
   let rec tr_instr i next =
     match i with
     | Minic.Set (v, e) -> tr_expr e (Llir.Set (convert_var v) :: next)
-    | Minic.Write (t, p, e) -> tr_expr p (tr_expr e (Llir.Store (Option.get (dtype_of_typ t)) :: next))
+    | Minic.Write (t, p, e) -> tr_expr p (tr_expr e (Llir.Store (Option.get (extended_dtype_of_typ t)) :: next))
     | Minic.StaticMemcpy (dest, id, len) ->
       let offset = Llir.Cst (Llir.I32Cst 0l) in
       let length = Llir.Cst (Llir.I32Cst (Int32.of_int len)) in

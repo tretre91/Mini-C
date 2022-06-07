@@ -89,18 +89,21 @@ let rec make_initlist t n l =
 
 (** Calcule la valeur d'une expression constante *)
 let calc_const_expr e =
+  let mask t v =
+    let size = 8 * sizeof t in
+    let mask = Int64.sub (Int64.shift_left 1L size) 1L in
+    Int64.logand v mask
+  in
   let cast_const_expr e target =
     let { t; value = v } = e in
     match t, target, v with
     | Integer _, Integer _, Integral v ->
-      let shift = 64 - 8 * (sizeof target) in
-      let v' = Int64.shift_right_logical (Int64.shift_left v shift) shift in
-      { t = target; value = Integral v' }
+      { t = target; value = Integral (mask target v) }
     | Bool, Integer _, Integral b ->
       { t = target; value = Integral (if b = 0L then 0L else 1L) }
     | Integer _, Bool, Integral v ->
       { t = target; value = Integral (if v = 0L then 0L else 1L) }
-    | _ -> failwith ""
+    | _ -> failwith __LOC__
   in
   let rec calc_const_expr = function
     | Cst c -> c
@@ -121,24 +124,24 @@ let calc_const_expr e =
       let { t = t2; value = v2 } = e2' in
       assert (t1 = t2); (* TODO : remove *)
       begin match op, v1, v2 with
-        | Add, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.add i1 i2) }
-        | Sub, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.sub i1 i2) }
-        | Mult, Integral i1, Integral i2 -> { t = t1; value = Integral (Int64.mul i1 i2) }
-        | Div, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.div i1 i2) }
-        | Mod, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.rem i1 i2) }
-        | Eq, _, _ -> { t = Bool; value = Integral (int64_of_bool (v1 = v2)) }
+        | Add, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.add i1 i2 |> mask t1) }
+        | Sub, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.sub i1 i2 |> mask t1) }
+        | Mult, Integral i1, Integral i2 -> { t = t1; value = Integral (Int64.mul i1 i2 |> mask t1) }
+        | Div, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.div i1 i2 |> mask t1) }
+        | Mod, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.rem i1 i2 |> mask t1) }
+        | Eq, _, _  -> { t = Bool; value = Integral (int64_of_bool (v1 = v2)) }
         | Neq, _, _ -> { t = Bool; value = Integral (int64_of_bool (v1 <> v2)) }
-        | Lt, _, _ -> { t = Bool; value = Integral (int64_of_bool (v1 < v2)) }
+        | Lt, _, _  -> { t = Bool; value = Integral (int64_of_bool (v1 < v2)) }
         | Leq, _, _ -> { t = Bool; value = Integral (int64_of_bool (v1 <= v2)) }
-        | Gt, _, _ -> { t = Bool; value = Integral (int64_of_bool (v1 > v2)) }
+        | Gt, _, _  -> { t = Bool; value = Integral (int64_of_bool (v1 > v2)) }
         | Geq, _, _ -> { t = Bool; value = Integral (int64_of_bool (v1 >= v2)) }
         | And, Integral b1, Integral b2  -> { t = Bool; value = Integral (int64_of_bool (b1 = 1L && b2 = 1L)) }
         | Or, Integral b1, Integral b2   -> { t = Bool; value = Integral (int64_of_bool (b1 = 1L || b2 = 1L)) }
-        | BAnd, Integral i1, Integral i2 -> { t = t1; value = Integral (Int64.logand i1 i2) }
-        | BOr, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.logor i1 i2) }
-        | BXor, Integral i1, Integral i2 -> { t = t1; value = Integral (Int64.logxor i1 i2) }
-        | Lsl, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.shift_left i1 (Int64.to_int i2)) }
-        | Asr, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.shift_right i1 (Int64.to_int i2)) }
+        | BAnd, Integral i1, Integral i2 -> { t = t1; value = Integral (Int64.logand i1 i2 |> mask t1) }
+        | BOr, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.logor i1 i2 |> mask t1) }
+        | BXor, Integral i1, Integral i2 -> { t = t1; value = Integral (Int64.logxor i1 i2 |> mask t1) }
+        | Lsl, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.shift_left i1 (Int64.to_int i2) |> mask t1) }
+        | Asr, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.shift_right i1 (Int64.to_int i2) |> mask t1) }
         | _, _, _ -> todo ~msg:"binop const expr" __LOC__
       end
     | InitList (const, l) when const ->

@@ -17,11 +17,11 @@ Le même arbre de syntaxe abstraite, où chaque expression possède un type et u
 - Déduit le type de chaque expression du programme
 - Vérifie la cohérence des types
 - Indique si une expression est "constante" (définition c d'une expression constante)
+- Ajoute des conversions de types implicites
 
 #### Description :
 
-Phase de vérification des types, et 1ère phase de la compilation. A la fin de cette étape toutes les erreurs ont été gérées, et le programme est considéré comme correct.
-A chaque expression est associé un type et un booléen `const`, une expression constante est une expression uniquement composée de littéraux et d'opérateurs.
+Phase de vérification des types, et 1ère phase de la compilation, à chaque expression est associé un type et un booléen `const`, une expression constante est une expression uniquement composée de littéraux et d'opérateurs.
 
 
 ## 2. AST typé -> AST (`minic.ml`)
@@ -39,6 +39,7 @@ Arbre de syntaxe abstraite non typé
 #### Opérations :
 
 - Suppression des types associés aux expressions
+- Calcul des expressions constantes
 - Remplacement des noms de variables locales par des identifiants uniques (à l'échelle de la fonction)
 - Transformation des tableaux en pointeurs
 - Ajout d'une fonction `__init` permettant d'initialiser les variables globales
@@ -46,7 +47,7 @@ Arbre de syntaxe abstraite non typé
 
 #### Description :
 
-À la fin de cette étape, les noms de variables locales ont été traduits en des identifiants uniques à l'échelle d'une fonction. On a également connaissance de toutes les données qui devront être placées en mémoire statique, et donc de la taille de la "section data" du programme.
+À la fin de cette étape, les noms de variables locales ont été traduits en des identifiants uniques à l'échelle d'une fonction. On a également connaissance de toutes les données qui devront être placées en mémoire statique, et donc de la taille de la "section data" du programme. Les expressions constantes (ex : taille des tableaux) sont également calculées à cette étape.
 
 On ajoute également une fonction spéciale qui a pour rôle d'initialiser les variables globales, en WebAssembly les variables globales ne peuvent être initialisées qu'avec des constantes ([pour l'instant](https://github.com/WebAssembly/extended-const/blob/master/proposals/extended-const/Overview.md)), d'où la nécessité d'ajouter une fonction permettant d'initialiser ces variables avec des expressions impliquant des opérateurs
 
@@ -128,12 +129,14 @@ Affichage du code .wat (WebAssembly text) correspondant
 
 ```ocaml
 (** Représentation des types. *)
-type typ =
+type integral_type =
+  | Char
   | Int
-  | Bool
-  | Void
-  | Ptr of typ
-  | Tab of typ * int
+
+type constant =
+  | CInteger of integral_type * Int64.t
+  | CBool of bool
+  | CIList of constant list
 
 (** Types des opérations binaires *)
 type binop =
@@ -149,17 +152,23 @@ type unop =
   | Not
   | BNot
 
+type typ =
+  | Integer of integral_type
+  | Bool
+  | Void
+  | Ptr of typ
+  | Tab of typ * expr
 (** Représentation des expressions. *)
-type expr_s =
-  | Cst of int
-  | BCst of bool
+and expr_s =
+  | Cst of constant
+  | Cast of expr * typ * typ
   | InitList of expr list
   | UnaryOperator of unop * expr
   | BinaryOperator of binop * expr * expr
   | Get of string
   | Read of expr * expr (* adresse * offset *)
   | Call of string * expr list
-(* Représentation d'une expression typée *)
+(** Représentation d'une expression typée *)
 and expr = {
   t: typ;
   const: bool;
@@ -171,7 +180,6 @@ type var_decl = string * typ * expr
 
 (** Représentation des instructions. *)
 type instr =
-  | Putchar of expr
   | Decl of var_decl list
   | Set of string * expr
   | Write of expr * expr * expr
@@ -206,33 +214,35 @@ type prog = global_decl list
 #### AST non typé
 
 ```ocaml
-(* Les types typ, binop et unop sont les mêmes que ceux de l'AST typé *)
-type typ = Minic_ast.typ
-type binop = Minic_ast.binop
-type unop = Minic_ast.unop
-
-(** Type des données pouvant être calculées à la compilation (i.e les valeurs "constantes") *)
-type datatype =
-  | CInt of int
-  | CBool of bool
-  | CFloat of float
-  | CIList of datatype list
-
+type typ =
+  | Integer of integral_type
+  | Bool
+  | Void
+  | Ptr of typ
+  | Tab of typ * int
 (** Représentation des expressions, on retire les informations de type de l'AST *)
-type expr =
-  | Cst of int
-  | BCst of bool
+and expr =
+  | Cst of const_expr
+  | Cast of expr * typ * typ
   | InitList of bool * expr list
-  | UnaryOperator of unop * expr
-  | BinaryOperator of binop * expr * expr
+  | UnaryOperator of typ * unop * expr
+  | BinaryOperator of typ * binop * expr * expr
   | Get of string
   | Read of typ * expr
   | Call of string * expr list
+(** Type des valeurs connues à la compilation *)
+and const_value =
+  | Integral of Int64.t
+  | Floating of float
+  | List of const_expr list
+and const_expr = {
+  t: typ;
+  value: const_value;
+}
 
 (** Représentation des instructions, on n'utilise plus le constructeur de déclaration
     de variable dans cette représentation *)
 type instr =
-  | Putchar of expr
   | Set of string * expr
   | StaticMemcpy of expr * int * int (* dest, id du segment, taille du segment *)
   | Write of typ * expr * expr
@@ -253,10 +263,8 @@ type fun_def = {
 }
 
 type prog = {
-  (* Données mémoire, ex : initialisateurs de tableux statiques *)
-  static: (int * string) list;
-  (* Données persistentes, ex : initialisateur des tableaux locaux *)
-  persistent: string list;
+  static: (int * string) list; (* Données mémoire *)
+  persistent: string list; (* Données persistentes, par ex : initialisateur des tableaux*)
   globals: (string * typ) list;
   functions: fun_def list;
 }
@@ -278,19 +286,33 @@ type num_op =
   | BAnd | BOr | BXor
   | Lsl | Asr
 
+type constant =
+  | I32Cst of Int32.t
+  | I64Cst of Int64.t
+  | F32Cst of float
+  | F64Cst of float
+
+type datatype =
+  | Int8
+  | Int16
+  | Int32
+  | Int64
+  | Float32
+  | Float64
+
 type instr =
-  | Cst of int
-  | Op of num_op
+  | Cst of constant
+  | Cast of datatype * datatype
+  | Op of Wasm.dtype * num_op
   | Get of var
   | Set of var
   | Load of Wasm.dtype
   | Store of Wasm.dtype
   | MemInit of int
   | If of seq * seq
-  | While of seq * seq
+  | While of seq * seq (* Liste des instructions de la condition d'arrêt + corps de la boucle *)
   | Call of string
   | Return
-  | Putchar
 and seq = instr list
 
 type fun_def = {
@@ -312,7 +334,7 @@ type prog = {
 #### Wasm
 
 ```ocaml
-type dtype = I32 | I64 | F32 | F64
+type dtype = I8 | I16 | I32 | I64 | F32 | F64
 
 type qualifier = Mut | Const
 

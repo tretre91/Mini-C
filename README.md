@@ -47,7 +47,7 @@ Les commentaires simples (`// ...`) et multilignes (`/* ... */`) sont supportés
 
 ### Types
 
-Les types disponibles sont `int`, `bool` et `void` (seulement pour les fonctions).
+Les types disponibles sont `char`, `int`, `bool` et `void` (seulement pour les fonctions).
 
 ### Variables
 
@@ -124,7 +124,6 @@ Les instructions supportées sont :
 
 | instructions                  | description                                   |
 | ----------------------------- | --------------------------------------------- |
-| `putchar(n);`                 | Affiche le caractère dont le code ascii est n |
 | `x = v;`                      | Assigne la valeur v à la variable x           |
 | `type x = v;`                 | Déclaration de variable                       |
 | `if (cond) {...} else {...} ` | Branchement conditionnel                      |

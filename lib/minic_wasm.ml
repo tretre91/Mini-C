@@ -22,8 +22,28 @@ let local_set i = Instr ["local.set"; (string_of_int i)]
 let local_tee i = Instr ["local.tee"; (string_of_int i)]
 
 (* Instructions mémoire *)
-let load dtype = Instr [sprintf "%s.load" (string_of_typ dtype)]
-let store dtype = Instr [sprintf "%s.store" (string_of_typ dtype)]
+let load dtype =
+  let instr = match dtype with
+    | I8  -> "i32.load8_s"
+    | I16 -> "i32.load16_s"
+    | I32 -> "i32.load"
+    | I64 -> "i64.load"
+    | F32 -> "f32.load"
+    | F64 -> "f64.load"
+  in
+  Instr [instr]
+
+let store dtype =
+  let instr = match dtype with
+    | I8  -> "i32.store8"
+    | I16 -> "i32.store16"
+    | I32 -> "i32.store"
+    | I64 -> "i64.store"
+    | F32 -> "f32.store"
+    | F64 -> "f64.store"
+  in
+  Instr [instr]
+
 let mem_init id = Instr ["memory.init"; string_of_int id]
 
 (* Instructions numériques *)

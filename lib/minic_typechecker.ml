@@ -50,7 +50,7 @@ type scope =
 
 (** Lève une exception qui contient un message d'erreur indiquant le nom de la
     fonction où l'erreur a eu lieu. *)
-let error =
+let error scope exn =
   let string_of_integral_type = function
     | Char -> "char"
     | Int  -> "int"
@@ -62,61 +62,60 @@ let error =
     | Ptr t -> string_of_typ t ^ " ptr"
     | Tab (t, _) -> Printf.sprintf "%s[]" (string_of_typ t)
   in
-  fun scope exn ->
-    let prefix =
-      match scope with
-      | Global -> "global scope"
-      | Local f -> "function " ^ f
-    in
-    let error =
-      match exn with
-      | Bad_assignement (tv, var, te) ->
-        Printf.sprintf "cannot assign a value of type %s to variable '%s' of type %s" (string_of_typ te) var (string_of_typ tv)
-      | Bad_condition (context, te) ->
-        Printf.sprintf "expecting a bool expression in %s's condition, got %s" context (string_of_typ te)
-      | Undefined_variable var ->
-        "undefined variable " ^ var
-      | Void_variable var ->
-        Printf.sprintf "'void %s': cannot define a variable of type void" var
-      | Undefined_function f ->
-        "call to undefined function " ^ f
-      | Unary_operator_mismatch (op, t) ->
-        let st = string_of_typ t in
-        begin match op with
-        | Minus -> "unary minus expects an integer expression, got " ^ st
-        | Not   -> "boolean not excpects an expression of type bool, got " ^ st
-        | BNot  -> "bitwise not expects an integer, got " ^ st
-        end
-      | Binary_operator_mismatch (op, t1, t2) ->
-        let st1 = string_of_typ t1 in
-        let st2 = string_of_typ t2 in
-        let op_type, expected = match op with
-        | Add | Sub | Mult | Div | Mod -> "an arithmetic", "of type int"
-        | Lt | Leq | Gt | Geq          -> "a comparison", "of type int"
-        | And | Or                     -> "a logical", "of type bool"
-        | Eq | Neq                     -> "an equality", "of the same type"
-        | BAnd | BOr | BXor            -> "a bitwise", "of type int"
-        | Lsl | Asr                    -> "a shift", "of type int"
-        in
-        Printf.sprintf "%s operator expects its arguments to be %s, got %s and %s" op_type expected st1 st2
-      | Bad_function_arg (f, param, tp, te) ->
-        let stp = string_of_typ tp in
-        let ste = string_of_typ te in
-        Printf.sprintf "in call to %s, parameter '%s' expects an argument of type %s, got %s" f param stp ste
-      | Return_value_mismatch (expected, got) ->
-        Printf.sprintf "cannot return a value of type %s from a %s function" (string_of_typ expected) (string_of_typ got)
-      | Initializer_list_mismatch (expr_t, list_t) ->
-        Printf.sprintf "cannot use a value of type %s in an initializer list of type %s" (string_of_typ expr_t) (string_of_typ list_t)
-      | Not_const_initializer v ->
-        Printf.sprintf "value assigned to %s is not constant" v
-      | Bad_cast (t1, t2) ->
-        Printf.sprintf "cannot convert a value of type %s to type %s" (string_of_typ t1) (string_of_typ t2)
-      | Not_a_pointer t ->
-        Printf.sprintf "variable of type %s cannot be accessed as a pointer" (string_of_typ t)
-      | Failure m -> m
-      | e -> raise e
-    in
-    failwith (Printf.sprintf "Type error in %s: %s" prefix error)
+  let prefix =
+    match scope with
+    | Global -> "global scope"
+    | Local f -> "function " ^ f
+  in
+  let error =
+    match exn with
+    | Bad_assignement (tv, var, te) ->
+      Printf.sprintf "cannot assign a value of type %s to variable '%s' of type %s" (string_of_typ te) var (string_of_typ tv)
+    | Bad_condition (context, te) ->
+      Printf.sprintf "expecting a bool expression in %s's condition, got %s" context (string_of_typ te)
+    | Undefined_variable var ->
+      "undefined variable " ^ var
+    | Void_variable var ->
+      Printf.sprintf "'void %s': cannot define a variable of type void" var
+    | Undefined_function f ->
+      "call to undefined function " ^ f
+    | Unary_operator_mismatch (op, t) ->
+      let st = string_of_typ t in
+      begin match op with
+      | Minus -> "unary minus expects an integer expression, got " ^ st
+      | Not   -> "boolean not excpects an expression of type bool, got " ^ st
+      | BNot  -> "bitwise not expects an integer, got " ^ st
+      end
+    | Binary_operator_mismatch (op, t1, t2) ->
+      let st1 = string_of_typ t1 in
+      let st2 = string_of_typ t2 in
+      let op_type, expected = match op with
+      | Add | Sub | Mult | Div | Mod -> "an arithmetic", "of type int"
+      | Lt | Leq | Gt | Geq          -> "a comparison", "of type int"
+      | And | Or                     -> "a logical", "of type bool"
+      | Eq | Neq                     -> "an equality", "of the same type"
+      | BAnd | BOr | BXor            -> "a bitwise", "of type int"
+      | Lsl | Asr                    -> "a shift", "of type int"
+      in
+      Printf.sprintf "%s operator expects its arguments to be %s, got %s and %s" op_type expected st1 st2
+    | Bad_function_arg (f, param, tp, te) ->
+      let stp = string_of_typ tp in
+      let ste = string_of_typ te in
+      Printf.sprintf "in call to %s, parameter '%s' expects an argument of type %s, got %s" f param stp ste
+    | Return_value_mismatch (expected, got) ->
+      Printf.sprintf "cannot return a value of type %s from a %s function" (string_of_typ expected) (string_of_typ got)
+    | Initializer_list_mismatch (expr_t, list_t) ->
+      Printf.sprintf "cannot use a value of type %s in an initializer list of type %s" (string_of_typ expr_t) (string_of_typ list_t)
+    | Not_const_initializer v ->
+      Printf.sprintf "value assigned to %s is not constant" v
+    | Bad_cast (t1, t2) ->
+      Printf.sprintf "cannot convert a value of type %s to type %s" (string_of_typ t1) (string_of_typ t2)
+    | Not_a_pointer t ->
+      Printf.sprintf "variable of type %s cannot be accessed as a pointer" (string_of_typ t)
+    | Failure m -> m
+    | e -> raise e
+  in
+  failwith (Printf.sprintf "Type error in %s: %s" prefix error)
 
 (** Type représentant l'environnement, les variables accessibles et les fonctions
     du programme *)
@@ -125,6 +124,7 @@ type environment = {
   variables: typ Env.t
 }
 
+(** Trouve la conversion appropriée vers un type cible pour une expression donnée *)
 let get_cast e t =
   match e.t, t with
   | _, _ when e.t = t -> e
@@ -133,6 +133,7 @@ let get_cast e t =
   | Integer _, Bool -> { t; const = e.const; expr = Cast (e, e.t, t) }
   | _, _ -> raise (Bad_cast (e.t, t))
 
+(** Convertit une expression en une expression entière *)
 let get_integer e =
   match e.t with
   | Integer _ -> e
@@ -143,6 +144,7 @@ let is_integral = function
   | Integer _ -> true
   | _ -> false
 
+(** Trouve le type résultat d'une opération binaire *)
 let unify t1 t2 =
   let unify_integral_type t1 t2 =
     match t1, t2 with
