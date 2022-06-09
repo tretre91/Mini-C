@@ -1,5 +1,8 @@
 module Ast = Minic_ast
 
+(** Table de hachage associant chaque fonction du programme à son type de retour *)
+let functions = Hashtbl.create 16
+
 (** Associe à un type minic un type de données wasm *)
 let dtype_of_typ = function
   | Minic.Void -> None
@@ -85,7 +88,9 @@ let tr_fdef func =
       tr_expr e1 (tr_expr e2 (make_op t (Llir.num_op_of_binop op) :: next))
     | Minic.Call (f, args) -> tr_args args (Llir.Call f :: next)
   and tr_args args next =
-    List.fold_left (fun next arg -> tr_expr arg next) next args
+    match args with
+    | [] -> next
+    | e::tl -> tr_expr e (tr_args tl next)
   in
   (* Traduit une instruction *)
   let rec tr_instr i next =
@@ -96,7 +101,12 @@ let tr_fdef func =
       let offset = Llir.Cst (Llir.I32Cst 0l) in
       let length = Llir.Cst (Llir.I32Cst (Int32.of_int len)) in
       tr_expr dest (offset :: length :: Llir.MemInit id :: next)
-    | Minic.Expr e -> tr_expr e next
+    | Minic.Expr e ->
+      begin match e with
+      | Minic.Call (fname, _) when Hashtbl.find functions fname = Minic.Void ->
+        tr_expr e next
+      | _ -> tr_expr e (Llir.Drop :: next)
+      end
     | Minic.Return e -> tr_expr e [Llir.Return]
     | Minic.If (e, b1, b2) -> 
       let s1 = tr_block b1 [] in
@@ -127,12 +137,18 @@ let tr_fdef func =
     Llir.code = code;
   }
 
-(* Traduction d'un programme de la 1ère représentation intermédiaire à la seconde *)
+(** Traduction d'un programme de la 1ère représentation intermédiaire à la seconde *)
 let tr_prog prog = 
+  (* initialisation de la table de hachage [functions] *)
+  let add_function (fdef: Minic.fun_def) = Hashtbl.add functions fdef.name fdef.return in
+  List.iter add_function Minic.(prog.functions);
+  List.iter add_function Minic.(prog.extern_functions);
+  
   let static =
       List.map (fun data -> None, data) Minic.(prog.persistent)
     @ List.map (fun (addr, data) -> Some addr, data) Minic.(prog.static)
   in
+
   {
     Llir.static = static;
     Llir.globals = List.map (fun (v, t) -> v, Option.get (dtype_of_typ t)) Minic.(prog.globals);

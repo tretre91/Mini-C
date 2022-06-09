@@ -53,7 +53,9 @@ rule preprocess args oc = parse
           | None -> failwith (Printf.sprintf "No file named %s found in the include directories" file)
       in
       let ic = open_in filename in
-      write ic oc;
+      let buf = Lexing.from_channel ic in
+      preprocess args oc buf;
+      close_in ic;
       preprocess args oc lexbuf
     }
   | "#include" space+ '<' (string as file) '>' '\n' {
@@ -65,7 +67,9 @@ rule preprocess args oc = parse
           | None -> failwith (Printf.sprintf "No file named %s found in the include directories" file)
       in
       let ic = open_in filename in
-      write ic oc;
+      let buf = Lexing.from_channel ic in
+      preprocess args oc buf;
+      close_in ic;
       preprocess args oc lexbuf
     }
   | eof { () }

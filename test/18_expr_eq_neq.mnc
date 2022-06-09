@@ -34,5 +34,6 @@ int main() {
   }
 
   halfabet();
+  putchar(10);
   return 0;
 }

@@ -37,6 +37,7 @@ type instr =
   | While of seq * seq (* Liste des instructions de la condition d'arrêt + corps de la boucle *)
   | Call of string
   | Return
+  | Drop
 and seq = instr list
 
 type fun_def = {

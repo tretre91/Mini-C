@@ -23,4 +23,5 @@ int fact(int n /* si n est négatif alors on renvoie 1 */) {
 
 void main() {
   putchar(fact(PARAM));
+  putchar(10);
 }

@@ -132,6 +132,8 @@ let while_loop cond s =
     )
   ]
 
+let drop = Instr ["drop"]
+
 let comment s = Comment s
 
 (** Définition de fonction *)
@@ -179,10 +181,10 @@ let tr_prog prog =
       | Lsl -> shl
       | Asr -> shr_s
     ) in
-    let rec tr_instr = function
-      | Llir.Cst i -> const i
-      | Llir.Cast (from, to_) -> cast from to_
-      | Llir.Op (dt, op) -> (tr_num_op op) dt
+    let rec tr_instr : (Llir.instr -> Wasm.expr) = function
+      | Cst i -> const i
+      | Cast (from, to_) -> cast from to_
+      | Op (dt, op) -> (tr_num_op op) dt
       | Get v -> get_var v
       | Set v -> set_var v
       | Load dtype -> load dtype
@@ -192,6 +194,7 @@ let tr_prog prog =
       | While (cond, seq) -> while_loop (tr_seq cond) (tr_seq seq)
       | Call f -> call f
       | Return -> return
+      | Drop -> drop
     and tr_seq seq =
       List.map tr_instr seq
     in

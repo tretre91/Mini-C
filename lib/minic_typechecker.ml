@@ -446,4 +446,3 @@ let typecheck_program (prog: prog) =
   ) functions;
   
   ast
-

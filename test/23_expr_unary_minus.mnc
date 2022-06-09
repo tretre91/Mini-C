@@ -19,14 +19,14 @@ void print_int(int i) {
 }
 
 int main() {
-  int i = 4 + -- 2;
+  int i = 4 + -(-2);
   print_int(i);
   putchar(10);
   print_int(4 - 2);
   putchar(10);
   print_int(- 4 + 2);
   putchar(10);
-  print_int(4 - +--5);
+  print_int(4 - +-(-5));
   putchar(10);
   return -(i - 5) + 1;
 }
