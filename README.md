@@ -6,6 +6,7 @@ Projet de compilation d'un langage impératif type c vers WebAssembly.
 
 - [Mini-C](#mini-c)
   - [Compilateur](#compilateur)
+  - [Tests](#tests)
   - [Syntaxe du langage](#syntaxe-du-langage)
     - [Commentaires](#commentaires)
     - [Types](#types)
@@ -14,7 +15,6 @@ Projet de compilation d'un langage impératif type c vers WebAssembly.
     - [Blocs](#blocs)
     - [Instructions](#instructions)
     - [Expressions](#expressions)
-  - [Tests](#tests)
 
 ## Compilateur
 
@@ -29,6 +29,15 @@ minic prog.mnc -o prog.wat
 ```
 
 Le format de sortie est le [format textuel](https://developer.mozilla.org/en-US/docs/WebAssembly/Understanding_the_text_format) de WebAssembly, le fichier produit peut ensuite être compilé vers le format binaire en utilisant par exemple [`wat2wasm`](https://github.com/WebAssembly/wabt#wabt-the-webassembly-binary-toolkit).
+
+## Tests
+
+Les tests sont dans le dossier test, un fichier par aspect du langage, triés par ordre chronologique. L'execution des tests nécessite d'avoir [deno](https://deno.land/), l'outil `wat2wasm` du [WebAssembly binary toolkit](https://github.com/WebAssembly/wabt#wabt-the-webassembly-binary-toolkit) et gcc d'installés.
+
+Ils peuvent être lancés avec la commande :
+```
+dune runtest
+```
 
 ## Syntaxe du langage
 
@@ -166,10 +175,3 @@ Une expression peut être sous une des formes suivantes :
 | **Autres**                    |                           |
 | variable                      | `x`                       |
 | appel de fonction             | `foo(5, false)`           |
-
-## Tests
-
-Les tests sont dans le dossier test, un fichier par aspect du langage, triés par ordre chronologique. Ils peuvent être lancés avec la commande :
-```
-dune runtest
-```

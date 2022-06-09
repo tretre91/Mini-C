@@ -11,8 +11,9 @@ type typ =
   | Void
   | Ptr of typ
   | Tab of typ * int
+
 (** Représentation des expressions, on retire les informations de type de l'AST *)
-and expr =
+type expr =
   | Cst of const_expr
   | Cast of expr * typ * typ
   | InitList of bool * expr list

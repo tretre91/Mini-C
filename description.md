@@ -1,8 +1,22 @@
 # Structure du code
 
+## 0. Préprocesseur (`preprocessor.mll`)
+
+#### Entrée :
+
+Fichier source minic
+
+#### Sortie :
+
+Fichier minic sans directives de préprocesseur
+
+#### Description :
+
+Phase de preprocessing, le préprocesseur ne gère pour l'instant que les déclarations `#include`, il s'occupe de chercher le fichier inclus et copier son contenu dans le fichier sortie.
+
 ## 1. Vérification de types (`minic_typechecker.ml`)
 
-Types utilisés : voir minic_ast.ml ou [en annexe](#AST-typé)
+Types utilisés : voir [minic_ast.ml](./lib/minic_ast.ml) ou [en annexe](#AST-typé)
 
 #### Entrée :
 
@@ -26,7 +40,7 @@ Phase de vérification des types, et 1ère phase de la compilation, à chaque ex
 
 ## 2. AST typé -> AST (`minic.ml`)
 
-Types utilisés : voir minic.ml ou [en annexe](#AST-non-typé)
+Types utilisés : voir [minic.ml](./lib/minic.ml) ou [en annexe](#AST-non-typé)
 
 #### Entrée :
 
@@ -67,7 +81,7 @@ On ajoute également une fonction spéciale qui a pour rôle d'initialiser les v
 
 ## 3. AST -> LLIR (`minic_llir.ml`)
 
-Types utilisés : voir llir.ml ou [en annexe](#LLIR)
+Types utilisés : voir [llir.ml](./lib/llir.ml) ou [en annexe](#LLIR)
 
 #### Entrée :
 
@@ -84,7 +98,7 @@ Cette phase traduit le programme sous forme d'AST en un programme équivalent ma
 
 ## 4. LLIR -> Wasm (`minic_wasm.ml`)
 
-Types utilisés : voir wasm.ml ou [en annexe](#Wasm)
+Types utilisés : voir [wasm.ml](./lib/wasm.ml) ou [en annexe](#Wasm)
 
 #### Entrée :
 
@@ -204,6 +218,7 @@ type fun_def = {
 type global_decl =
   | Variable of var_decl
   | Function of fun_def
+  | ForwardDecl of fun_def
 
 (** Représentation des programmes.
     Un programme est simplement une suite de déclarations de variables ou de fonctions. *)
@@ -220,8 +235,9 @@ type typ =
   | Void
   | Ptr of typ
   | Tab of typ * int
+
 (** Représentation des expressions, on retire les informations de type de l'AST *)
-and expr =
+type expr =
   | Cst of const_expr
   | Cast of expr * typ * typ
   | InitList of bool * expr list
@@ -267,6 +283,7 @@ type prog = {
   persistent: string list; (* Données persistentes, par ex : initialisateur des tableaux*)
   globals: (string * typ) list;
   functions: fun_def list;
+  extern_functions: fun_def list;
 }
 ```
 
@@ -313,6 +330,7 @@ type instr =
   | While of seq * seq (* Liste des instructions de la condition d'arrêt + corps de la boucle *)
   | Call of string
   | Return
+  | Drop
 and seq = instr list
 
 type fun_def = {
@@ -327,6 +345,7 @@ type prog = {
   static: (int option * string) list;
   globals: (string * Wasm.dtype) list;
   functions: fun_def list;
+  extern_functions: fun_def list;
 }
 ```
 
@@ -345,6 +364,7 @@ type expr =
   | Loop of seq
   | If of seq * seq
   | Function of string * dtype list * dtype option * dtype list * seq
+  | ImportedFunction of string * dtype list * dtype option
   | Global of string * qualifier * dtype * seq
   | Start of string
   | Memory of int
