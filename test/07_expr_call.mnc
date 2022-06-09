@@ -4,10 +4,10 @@ int add(int a, int b) {
   return a + b;
 }
 
-int double(int x) {
+int double_(int x) {
   return add(x, x);
 }
 
 int main() {
-  return add(double(PARAM), double(-5));
+  return add(double_(PARAM), double_(-5));
 }

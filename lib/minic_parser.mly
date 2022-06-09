@@ -74,6 +74,7 @@ program:
 global_declaration:
 | vars=variable_decl SEMI { List.map (fun v -> Variable v) vars }
 | func=function_decl { [Function func] }
+| func=predeclaration { [ForwardDecl func] }
 ;
 
 (* Déclaration de variables. *)
@@ -100,6 +101,11 @@ typ:
 function_decl:
 | t=typ f=IDENT LPAR p=separated_list(COMMA, parameter) RPAR b=block
     { { name=f; params=p; return=t; body=b } }
+;
+
+predeclaration:
+| t=typ f=IDENT LPAR p=separated_list(COMMA, parameter) RPAR SEMI
+    { { name=f; params=p; return=t; body=[] } }
 ;
 
 (* Paramètre formel d'une fonction *)

@@ -1,3 +1,4 @@
 (executable
  (name minic)
- (libraries libminic cmdliner))
+ (libraries libminic cmdliner)
+ (modules minic))

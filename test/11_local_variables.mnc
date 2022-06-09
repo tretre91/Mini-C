@@ -7,9 +7,9 @@ int step(int i) {
 
 int main() {
   int local = 5;
-  int default;
+  int default_value;
   bool b = false;
 
   GLOBAL = step(local);
-  return default;
+  return default_value;
 }

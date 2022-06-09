@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 int y = 44;
 
 void print_int(int i) {

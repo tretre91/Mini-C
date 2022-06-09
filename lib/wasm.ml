@@ -9,6 +9,7 @@ type expr =
   | Loop of seq
   | If of seq * seq
   | Function of string * dtype list * dtype option * dtype list * seq
+  | ImportedFunction of string * dtype list * dtype option
   | Global of string * qualifier * dtype * seq
   | Start of string
   | Memory of int

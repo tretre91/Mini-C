@@ -58,6 +58,7 @@ type prog = {
   persistent: string list; (* Données persistentes, par ex : initialisateur des tableaux*)
   globals: (string * typ) list;
   functions: fun_def list;
+  extern_functions: fun_def list;
 }
 
 let todo ?msg location =
@@ -317,8 +318,8 @@ let prog_of_ast ast =
   in
 
   let static_offset = ref 0 in
-  let static, globals, funcs, init_instr =
-    List.fold_left (fun (static, globals, funcs, init_instr) global ->
+  let static, globals, funcs, extern_funcs, init_instr =
+    List.fold_left (fun (static, globals, funcs, extern_funcs, init_instr) global ->
       match global with
       | Ast.Variable (v, t, e) ->
         Hashtbl.add env v v;
@@ -330,11 +331,14 @@ let prog_of_ast ast =
           let offset = !static_offset in
           let buffer = buffer_of_initlist l' in
           static_offset := offset + n * (sizeof t);
-          (offset, Buffer.contents buffer) :: static, (v, Ptr t) :: globals, funcs, Set (v, make_size offset)::init_instr
-        | _, _ -> static, (v, t') :: globals, funcs, Set (v, e') :: init_instr
+          (offset, Buffer.contents buffer) :: static, (v, Ptr t) :: globals, funcs, extern_funcs, Set (v, make_size offset)::init_instr
+        | _, _ -> static, (v, t') :: globals, funcs, extern_funcs, Set (v, e') :: init_instr
         end
-      | Ast.Function f -> static, globals, tr_fun f :: funcs, init_instr
-    ) ([], [], [], []) ast
+      | Ast.Function f -> static, globals, tr_fun f :: funcs, extern_funcs, init_instr
+      | Ast.ForwardDecl f ->
+        let f' = { (tr_fun f) with locals = []; body = [] } in
+        static, globals, funcs, f' :: extern_funcs, init_instr
+    ) ([], [], [], [], []) ast
   in
   (* on crée une fonction init qui contient les initialisations de variables globales *)
   let init_fun = {
@@ -345,4 +349,10 @@ let prog_of_ast ast =
     body = List.rev init_instr;
   }
   in
-  { static; persistent = List.rev (!persistent_data); globals; functions = init_fun :: funcs }
+  {
+    static;
+    persistent = List.rev (!persistent_data);
+    globals;
+    extern_functions = extern_funcs;
+    functions = init_fun :: funcs
+  }

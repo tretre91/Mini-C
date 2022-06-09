@@ -5,3 +5,7 @@ int f() {
   GLOBAL = (4) * 4 + 1;
   return 5 * 2;
 }
+
+int main() {
+  return 0;
+}

@@ -1,6 +1,7 @@
 open Minic_ast
 (* Pour représenter les environnements associant chaque variable à son type. *)
 module Env = Map.Make(String)
+module StrSet = Set.Make(String)
 
 (** Exception levée lorsque l'on tente d'assigner à une variable une expression
     du mauvais type *)
@@ -295,8 +296,9 @@ let typecheck_program (prog: prog) =
           Bad_cast _ -> raise (Bad_assignement (tv, x, te))        
   in
 
-  let typecheck_function env (fdef: fun_def) =
-    let returns = ref false in
+  let typecheck_function ?is_forward_decl env (fdef: fun_def) =
+    (* Si la fonction est un prédéclaration on considère qu'elle renvoie une valeur *)
+    let returns = ref (Option.is_some is_forward_decl) in
     (* Vérification du bon typage des instructions d'un bloc *)
     let rec typecheck_block env b =
       let env = ref env in
@@ -390,6 +392,9 @@ let typecheck_program (prog: prog) =
     end
   in
 
+  (* Table de hachage contenant les fonctions définies dans le programme *)
+  let functions = Hashtbl.create 16 in
+
   (* On vérifie les déclarations de variables globales et le type des fonction *)
   let _, ast = List.fold_left_map (fun (env, vars) decl ->
     match decl with
@@ -403,14 +408,42 @@ let typecheck_program (prog: prog) =
       with
         e -> error Global e
       end
-    | Function f -> begin
-      try
-        let env', f' = typecheck_function env f in
-        (env', vars), Function f'
-      with
-        e -> error (Local f.name) e
+    | Function f ->
+      begin match Hashtbl.find_opt functions f.name with
+      | None | (Some (ForwardDecl _)) ->
+        begin try
+          let env' = { env with functions = Env.remove f.name env.functions } in
+          let env'', f' = typecheck_function env' f in
+          (env'', vars), Function f'
+        with
+          e -> error (Local f.name) e
+        end
+      | Some (Function _) -> error Global (Failure (Printf.sprintf "redefinition of function %s" f.name))
+      | _ -> failwith __LOC__
+      end
+    | ForwardDecl f ->
+      begin match Hashtbl.find_opt functions f.name with
+      | None ->
+        begin try
+          let env', f' = typecheck_function ~is_forward_decl:true env f in
+          Hashtbl.add functions f.name (ForwardDecl f');
+          (env', vars), ForwardDecl f'
+        with
+          e -> error (Local f.name) e
+        end
+      | Some (ForwardDecl _) -> error Global (Failure (Printf.sprintf "redeclaration of function %s" f.name))
+      | Some (Function _) -> error Global (Failure (Printf.sprintf "trying to declare function %s which is already declared" f.name))
+      | _ -> failwith __LOC__
       end
   ) ({ functions=Env.empty; variables=Env.empty }, Env.empty) prog
   in
+  
+  (* Vérification des prédéclarations (TODO) *)
+  Hashtbl.iter (fun _ f ->
+    match f with
+    | ForwardDecl _ -> ()
+    | _ -> ()
+  ) functions;
+  
   ast
 

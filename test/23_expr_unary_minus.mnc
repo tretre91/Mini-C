@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 void print_int_aux(int i) {
   int div = i / 10;
   int left = i - div * 10;

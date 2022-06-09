@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 // affiche un entier de 0 à 9
 void put_digit(int i) {
   putchar(48 + i);

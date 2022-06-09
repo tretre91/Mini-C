@@ -198,13 +198,17 @@ let tr_prog prog =
     let body = tr_seq fdef.code in
     func fdef.name fdef.params fdef.locals fdef.return body
   in
+  let tr_extern_func (fdef: Llir.fun_def) =
+    ImportedFunction (fdef.name, fdef.params, fdef.return)
+  in
   let globals = List.map (fun (v, t) -> Global (v, Mut, t, default_instr t)) Llir.(prog.globals) in
   let data = List.map (fun (addr, data) -> Data (addr, data)) Llir.(prog.static) in
   Module (
        Start "__init"
-    :: Memory 2
-    :: Global ("__sp", Mut, I32, [const (Llir.I32Cst 65536l)])
-    :: data
+    :: (List.map tr_extern_func Llir.(prog.extern_functions))
+    @ [Memory 2;
+       Global ("__sp", Mut, I32, [const (Llir.I32Cst 65536l)])]
+    @  data
     @  globals
     @  (List.map tr_fdef Llir.(prog.functions))
   )
@@ -216,6 +220,15 @@ let print_prog channel p =
   let printfi format =
     output_string channel (String.make !indent ' ');
     fprintf channel format
+  in
+  (* Affichage des paramètres d'une fonction *)
+  let print_params channel params =
+    List.iter (fun typ -> fprintf channel " (param %s)" (string_of_typ typ)) params
+  in
+  (* Affichage du type de retour d'une fonction *)
+  let print_result channel result =
+    if Option.is_some result then
+      fprintf channel "(result %s)" (string_of_typ (Option.get result))
   in
   (* Affiche une séquence d'expressions *)
   let rec print_seq indent_incr seq =
@@ -258,15 +271,11 @@ let print_prog channel p =
       printfi "(global $%s (%s %s)\n" name (string_of_qualifier q) (string_of_typ t);
       print_seq 2 seq;
       printfi ")\n"
+    (* Affichage d'une fonction importée *)
+    | ImportedFunction (name, params, result) ->
+      printfi "(import \"std\" \"%s\" (func $%s%a %a))\n" name name print_params params print_result result
     (* Affichage d'une déclaration de fonction *)
     | Function (name, params, result, locals, seq) ->
-      let print_params channel params =
-        List.iter (fun typ -> fprintf channel " (param %s)" (string_of_typ typ)) params
-      in
-      let print_result channel result =
-        if Option.is_some result then
-          fprintf channel "(result %s)" (string_of_typ (Option.get result))
-      in
       printfi "(func $%s (export \"%s\")%a %a\n" name name print_params params print_result result;
       (* Affichage des déclarations de variables locales *)
       if locals <> [] then

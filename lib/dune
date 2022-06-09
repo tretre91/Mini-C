@@ -5,9 +5,13 @@
  (flags --explain --dump)
  (modules minic_parser))
 
+(ocamllex
+ (modules preprocessor))
+
 (library
  (name libminic)
  (modules
+  preprocessor
   minic_lexer
   minic_parser
   minic_ast
@@ -16,4 +20,6 @@
   minic
   wasm
   minic_llir
-  minic_wasm))
+  minic_wasm
+  compile_args
+  compiler))

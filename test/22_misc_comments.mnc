@@ -1,6 +1,8 @@
 // calcule la factorielle de 5
 // et affiche le caractère ascii correspondant
 
+#include <stdio.h>
+
 int PARAM = 5;
 
 /**

@@ -137,4 +137,5 @@ let tr_prog prog =
     Llir.static = static;
     Llir.globals = List.map (fun (v, t) -> v, Option.get (dtype_of_typ t)) Minic.(prog.globals);
     Llir.functions = List.map tr_fdef Minic.(prog.functions);
+    Llir.extern_functions = List.map (fun f -> { (tr_fdef f) with code = [] }) Minic.(prog.extern_functions);
   }

@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 void print_int_aux(int i) {
   if (i < 10) {
     putchar(48 + i);

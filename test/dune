@@ -1,3 +1,4 @@
 (test
- (name typechecker)
- (libraries libminic))
+ (name tests)
+ (libraries libminic patdiff)
+ (modules tests))

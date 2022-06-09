@@ -9,3 +9,7 @@ int param1(int a) {
 int param2(int a, int b) {
   return 2;
 }
+
+int main() {
+  return 0;
+}
