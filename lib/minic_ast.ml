@@ -7,6 +7,7 @@ type integral_type =
 
 type constant =
   | CInteger of integral_type * Int64.t
+  | CFloat of float
   | CBool of bool
   | CIList of constant list
 
@@ -26,6 +27,7 @@ type unop =
 
 type typ =
   | Integer of integral_type
+  | Float
   | Bool
   | Void
   | Ptr of typ

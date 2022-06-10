@@ -7,6 +7,7 @@ open Minic_ast
 
 type typ =
   | Integer of integral_type
+  | Float
   | Bool
   | Void
   | Ptr of typ
@@ -81,7 +82,7 @@ let escape_string s =
 let sizeof = function
   | Integer Char -> 1
   | Integer Short -> 2
-  | Integer Int | Bool | Ptr _ -> 4
+  | Integer Int | Float | Bool | Ptr _ -> 4
   | Integer Long -> 8
   | _ -> failwith "sizeof"
 
@@ -89,6 +90,7 @@ let rec default_value t =
   match t with
   | Bool
   | Integer _ -> Cst { t; value = Integral Int64.zero }
+  | Float -> Cst { t; value = Floating 0.0 }
   | Void -> failwith __LOC__ (* unreachable *)
   | Ptr _ -> failwith __LOC__ (* unreachable *)
   | Tab (t, n) -> InitList (true, List.init n (fun _ -> default_value t))
@@ -109,16 +111,20 @@ let calc_const_expr e =
     in
     Int64.logand v mask
   in
+  let simple_precision f = Int32.float_of_bits (Int32.bits_of_float f) in
   let cast_const_expr e target =
     let { t; value = v } = e in
-    match t, target, v with
-    | Integer _, Integer _, Integral v ->
-      { t = target; value = Integral (mask target v) }
-    | Bool, Integer _, Integral b ->
-      { t = target; value = Integral (if b = 0L then 0L else 1L) }
-    | Integer _, Bool, Integral v ->
-      { t = target; value = Integral (if v = 0L then 0L else 1L) }
-    | _ -> failwith __LOC__
+    let v = match t, target, v with
+      | Integer _, Integer _, Integral v -> Integral (mask target v)
+      | Integer _, Float,     Integral v -> Floating (Int64.to_float v)
+      | Integer _, Bool,      Integral v -> Integral (if v = 0L then 0L else 1L)
+      | Float,     Integer _, Floating f -> Integral (mask target (Int64.of_float f))
+      | Float,     Bool,      Floating f -> Integral (if f = 0.0 then 0L else 1L)
+      | Bool,      Integer _, Integral b -> Integral (if b = 0L then 0L else 1L)
+      | Bool,      Float,     Integral b -> Floating (if b = 0L then 0.0 else 1.0)
+      | _ -> failwith __LOC__
+    in
+    { t = target; value = v }
   in
   let rec calc_const_expr = function
     | Cst c -> c
@@ -127,6 +133,7 @@ let calc_const_expr e =
       let e' = calc_const_expr e in
       begin match op, e'.t, e'.value with
         | Minus, Integer _, Integral v -> { e' with value = Integral (Int64.neg v) }
+        | Minus, Float, Floating f -> { e' with value = Floating (Float.neg f) }
         | Not, Bool, Integral b   -> { e' with value = Integral (if b = 1L then 0L else 1L) }
         | BNot, Integer _, Integral v  -> { e' with value = Integral (Int64.lognot v) }
         | _, _, _ -> todo ~msg:"unop const expr" __LOC__
@@ -138,11 +145,15 @@ let calc_const_expr e =
       let { t = t1; value = v1 } = e1' in
       let { t = t2; value = v2 } = e2' in
       assert (t1 = t2); (* TODO : remove *)
-      begin match op, v1, v2 with
+      let e' = match op, v1, v2 with
         | Add, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.add i1 i2 |> mask t1) }
+        | Add, Floating f1, Floating f2  -> { t = t1; value = Floating (f1 +. f2) }
         | Sub, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.sub i1 i2 |> mask t1) }
+        | Sub, Floating f1, Floating f2  -> { t = t1; value = Floating (f1 -. f2) }
         | Mult, Integral i1, Integral i2 -> { t = t1; value = Integral (Int64.mul i1 i2 |> mask t1) }
+        | Mult, Floating f1, Floating f2 -> { t = t1; value = Floating (f1 *. f2) }
         | Div, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.div i1 i2 |> mask t1) }
+        | Div, Floating f1, Floating f2  -> { t = t1; value = Floating (f1 /. f2) }
         | Mod, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.rem i1 i2 |> mask t1) }
         | Eq, _, _  -> { t = Bool; value = Integral (int64_of_bool (v1 = v2)) }
         | Neq, _, _ -> { t = Bool; value = Integral (int64_of_bool (v1 <> v2)) }
@@ -158,6 +169,10 @@ let calc_const_expr e =
         | Lsl, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.shift_left i1 (Int64.to_int i2) |> mask t1) }
         | Asr, Integral i1, Integral i2  -> { t = t1; value = Integral (Int64.shift_right i1 (Int64.to_int i2) |> mask t1) }
         | _, _, _ -> todo ~msg:"binop const expr" __LOC__
+      in
+      begin match e'.t, e'.value with
+      | Float, Floating f -> { t = Float; value = Floating (simple_precision f) }
+      | _, _ -> e'
       end
     | InitList (const, l) when const ->
       (* le type n'est plus utilisé à cette étape dans le cas d'une initializer list *)
@@ -171,6 +186,7 @@ let calc_const_expr e =
 let prog_of_ast ast =
   let rec const_expr_of_constant = function
     | CInteger (t, v)  -> { t = Integer t; value = Integral v }
+    | CFloat f -> { t = Float; value = Floating f }
     | CBool b  -> { t = Bool; value = Integral (if b then 1L else 0L) }
     | CIList l -> { t = Tab(Void, -1); value = List (List.map const_expr_of_constant l)}
   in
@@ -207,6 +223,7 @@ let prog_of_ast ast =
       | Integer Short, Integral v -> Buffer.add_int16_le buffer (Int64.to_int v)
       | (Integer Int | Bool), Integral v -> Buffer.add_int32_le buffer (Int64.to_int32 v)
       | Integer Long, Integral v -> Buffer.add_int64_le buffer v
+      | Float, Floating f -> Buffer.add_int32_le buffer (Int32.bits_of_float f)
       | _, List l -> List.iter insert l
       | _, _ -> todo ~msg:"buffer" __LOC__
     in
@@ -217,6 +234,7 @@ let prog_of_ast ast =
   (* Fonction de traduction d'un type *)
   let rec tr_typ = function
     | Ast.Integer t -> Integer t
+    | Ast.Float -> Float
     | Ast.Bool -> Bool
     | Ast.Void -> Void
     | Ast.Ptr t -> Ptr (tr_typ t)

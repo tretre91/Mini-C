@@ -12,8 +12,9 @@
         "false",    CST (CBool false);
         "char",     CHAR;
         "short",    SHORT;
-        "long",     LONG;
         "int",      INT;
+        "long",     LONG;
+        "float",    FLOAT;
         "bool",     BOOL;
         "void",     VOID;
         "if",       IF;
@@ -32,7 +33,14 @@
       let code = match s.[1] with
         | 'x' -> int_of_string ("0x" ^ (String.sub s 2 (len - 2)))
         | '0'..'7' -> int_of_string ("0o" ^ (String.sub s 1 (len - 1)))
+        | 'a' -> 7
+        | 'b' -> 8
+        | 'f' -> 12
         | 'n' -> 10
+        | 'r' -> 13
+        | 't' -> 9
+        | 'v' -> 11
+        | ('\'' | '\"' | '?' | '\\') as c -> Char.code c
         | _ -> failwith "TODO : special escape characters"
       in
       Char.chr code
@@ -65,7 +73,11 @@ let oct_char = "\\" (octal | octal octal | octal octal octal)
 let chr = (_ | hex_char | oct_char | valid_escapes)
 let char = "'" chr "'"
 
-let number = '-'? digit+
+let number = digit+
+let integer = '-'? (number | "0x" hex+ | "0b" ['0''1']+)
+
+let float = '-'? (number '.' (number ?) | '.' number)
+
 let alpha = ['a'-'z' 'A'-'Z']
 let ident = alpha (alpha | '_' | digit)*
 let comment = "//"[^'\n']*
@@ -82,8 +94,10 @@ rule token = parse
       { multiline_comment (lexeme_start_p lexbuf) lexbuf }
   | "'" (chr as c) "'"
       { CST (CInteger (Char, Int64.of_int (int_of_char (char_of_string c)))) }
-  | number as n
+  | integer as n
       { let cst = get_int_constant n in CST cst }
+  | float as f
+      { CST (CFloat (float_of_string f)) }
   | ident as id
       { keyword_or_ident id }
   | ";"

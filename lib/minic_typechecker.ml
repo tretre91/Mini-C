@@ -60,6 +60,7 @@ let error scope exn =
   in
   let rec string_of_typ = function
     | Integer t -> string_of_integral_type t
+    | Float -> "float"
     | Bool -> "bool"
     | Void -> "void"
     | Ptr t -> string_of_typ t ^ " ptr"
@@ -131,9 +132,9 @@ type environment = {
 let get_cast e t =
   match e.t, t with
   | _, _ when e.t = t -> e
-  | Integer _, Integer _
-  | Bool, Integer _
-  | Integer _, Bool -> { t; const = e.const; expr = Cast (e, e.t, t) }
+  | Integer _, (Integer _ | Float | Bool)
+  | Float, (Integer _ | Bool)
+  | Bool, (Integer _ | Float) -> { t; const = e.const; expr = Cast (e, e.t, t) }
   | _, _ -> raise (Bad_cast (e.t, t))
 
 (** Convertit une expression en une expression entière *)
@@ -160,6 +161,8 @@ let unify t1 t2 =
   | _, _ when t1 = t2 -> t1
   | Bool, _ -> t2
   | _, Bool -> t1
+  | Float, _
+  | _, Float -> Float
   | _, _ -> failwith "types cannot be unified"
 
 (** Vérification du bon typage d'un programme.
@@ -167,6 +170,7 @@ let unify t1 t2 =
 let typecheck_program (prog: prog) =
   let type_constant = function
     | CInteger (t, _) -> Integer t
+    | CFloat _ -> Float
     | CBool _ -> Bool
     | CIList _ -> failwith "never reached, initializer lists are not treated as constants in this step"
   in
@@ -196,7 +200,7 @@ let typecheck_program (prog: prog) =
           try
             let e' = match op with
               | Minus ->
-                let t = unify e.t (Integer Int) in
+                let t = unify e.t (Integer Int) in (* TODO : pourquoi ? *)
                 get_cast e t
               | Not  -> get_cast e Bool
               | BNot -> get_integer e

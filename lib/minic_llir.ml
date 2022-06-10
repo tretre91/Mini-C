@@ -8,6 +8,7 @@ let dtype_of_typ = function
   | Minic.Void -> None
   | Minic.Integer Ast.Long -> Some Wasm.I64
   | Minic.Integer _ | Minic.Bool -> Some Wasm.I32
+  | Minic.Float -> Some Wasm.F32
   | Minic.Ptr _ -> Some Wasm.I32
   | Minic.Tab _ -> failwith "unreachable"
 
@@ -19,6 +20,7 @@ let extended_dtype_of_typ = function
   | Minic.Integer Ast.Short -> Some Wasm.I16
   | Minic.Integer Ast.Int | Minic.Bool -> Some Wasm.I32
   | Minic.Integer Ast.Long -> Some Wasm.I64
+  | Minic.Float -> Some Wasm.F32
   | Minic.Ptr _ -> Some Wasm.I32
   | Minic.Tab _ -> failwith "unreachable"
 
@@ -41,14 +43,10 @@ let tr_fdef func =
       | None -> Global v
   in
   let constant_of_const_expr c =
-    let get_integer c =
-      match Minic.(c.value) with
-      | Minic.Integral v -> v
-      | _ -> failwith "not an integer"
-    in
-    match Minic.(c.t) with
-    | Integer (Char | Short | Int) | Bool -> Llir.I32Cst (Int64.to_int32 (get_integer c))
-    | Integer Long -> Llir.I64Cst (get_integer c)
+    match Minic.(c.t, c.value) with
+    | (Integer (Char | Short | Int) | Bool), Integral i -> Llir.I32Cst (Int64.to_int32 i)
+    | Integer Long, Integral i -> Llir.I64Cst i
+    | Float, Floating f -> Llir.F32Cst f
     | _ -> failwith __LOC__
   in
   let datatype_of_typ : (Minic.typ -> Llir.datatype) = function
@@ -56,6 +54,7 @@ let tr_fdef func =
     | Integer Short -> Int16
     | Integer Int | Bool -> Int32
     | Integer Long -> Int64
+    | Float -> Float32
     | _ -> failwith "TODO"
   in
   let make_op t op =
@@ -76,6 +75,7 @@ let tr_fdef func =
         let zero = match t with
         | Integer Long -> Llir.I64Cst Int64.zero
         | Integer _ -> Llir.I32Cst Int32.zero
+        | Float -> Llir.F32Cst 0.0
         | _ -> failwith __LOC__
         in
         Llir.Cst zero :: tr_expr e (make_op t Llir.Sub :: next)
@@ -84,6 +84,7 @@ let tr_fdef func =
         let minus_one = match t with
         | Integer Long -> Llir.I64Cst Int64.minus_one
         | Integer _ -> Llir.I32Cst Int32.minus_one
+        | Float -> Llir.F32Cst 1.0
         | _ -> failwith __LOC__
         in
         tr_expr e (Llir.Cst minus_one :: make_op t Llir.BXor :: next)
@@ -126,10 +127,11 @@ let tr_fdef func =
     | [] -> next
     | i::tl -> tr_instr i (tr_block tl next)
   in
-  let end_seq = match Minic.(func.return) with (* TODO : retirer dans les cas non-void *)
+  let end_seq = match Minic.(func.return) with
     | Void -> [Llir.Return]
     | Integer Long -> [Llir.Cst (Llir.I64Cst 0L); Llir.Return]
     | Integer _ | Bool -> [Llir.Cst (Llir.I32Cst 0l); Llir.Return]
+    | Float -> [Llir.Cst (Llir.F32Cst 0.0); Llir.Return]
     | _ -> []
   in
   let code = tr_block Minic.(func.body) end_seq in

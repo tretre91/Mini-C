@@ -91,7 +91,13 @@ let cast from t =
 let add dtype = Instr [sprintf "%s.add" (string_of_typ dtype)]
 let sub dtype = Instr [sprintf "%s.sub" (string_of_typ dtype)]
 let mul dtype = Instr [sprintf "%s.mul" (string_of_typ dtype)]
-let div dtype = Instr [sprintf "%s.div_s" (string_of_typ dtype)]
+let div dtype =
+  let instr = match dtype with
+  | I32 | I64 -> "div_s"
+  | F32 | F64 -> "div"
+  | _ -> failwith __LOC__
+  in
+  Instr [sprintf "%s.%s" (string_of_typ dtype) instr]
 let rem dtype = Instr [sprintf "%s.rem_s" (string_of_typ dtype)]
 
 
