@@ -56,7 +56,7 @@ Les commentaires simples (`// ...`) et multilignes (`/* ... */`) sont supportés
 
 ### Types
 
-Les types disponibles sont `char`, `short`, `int`, `long`,`float`, `bool` et `void` (seulement pour les fonctions).
+Les types disponibles sont `char`, `short`, `int`, `long`,`float`, `double`, `bool` et `void` (seulement pour les fonctions).
 
 ### Variables
 

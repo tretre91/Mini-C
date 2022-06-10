@@ -9,6 +9,7 @@ let dtype_of_typ = function
   | Minic.Integer Ast.Long -> Some Wasm.I64
   | Minic.Integer _ | Minic.Bool -> Some Wasm.I32
   | Minic.Float -> Some Wasm.F32
+  | Minic.Double -> Some Wasm.F64
   | Minic.Ptr _ -> Some Wasm.I32
   | Minic.Tab _ -> failwith "unreachable"
 
@@ -21,6 +22,7 @@ let extended_dtype_of_typ = function
   | Minic.Integer Ast.Int | Minic.Bool -> Some Wasm.I32
   | Minic.Integer Ast.Long -> Some Wasm.I64
   | Minic.Float -> Some Wasm.F32
+  | Minic.Double -> Some Wasm.F64
   | Minic.Ptr _ -> Some Wasm.I32
   | Minic.Tab _ -> failwith "unreachable"
 
@@ -47,6 +49,7 @@ let tr_fdef func =
     | (Integer (Char | Short | Int) | Bool), Integral i -> Llir.I32Cst (Int64.to_int32 i)
     | Integer Long, Integral i -> Llir.I64Cst i
     | Float, Floating f -> Llir.F32Cst f
+    | Double, Floating d -> Llir.F64Cst d
     | _ -> failwith __LOC__
   in
   let datatype_of_typ : (Minic.typ -> Llir.datatype) = function
@@ -55,6 +58,7 @@ let tr_fdef func =
     | Integer Int | Bool -> Int32
     | Integer Long -> Int64
     | Float -> Float32
+    | Double -> Float64
     | _ -> failwith "TODO"
   in
   let make_op t op =
@@ -76,6 +80,7 @@ let tr_fdef func =
         | Integer Long -> Llir.I64Cst Int64.zero
         | Integer _ -> Llir.I32Cst Int32.zero
         | Float -> Llir.F32Cst 0.0
+        | Double -> Llir.F64Cst 0.0
         | _ -> failwith __LOC__
         in
         Llir.Cst zero :: tr_expr e (make_op t Llir.Sub :: next)
@@ -84,7 +89,6 @@ let tr_fdef func =
         let minus_one = match t with
         | Integer Long -> Llir.I64Cst Int64.minus_one
         | Integer _ -> Llir.I32Cst Int32.minus_one
-        | Float -> Llir.F32Cst 1.0
         | _ -> failwith __LOC__
         in
         tr_expr e (Llir.Cst minus_one :: make_op t Llir.BXor :: next)
@@ -132,6 +136,7 @@ let tr_fdef func =
     | Integer Long -> [Llir.Cst (Llir.I64Cst 0L); Llir.Return]
     | Integer _ | Bool -> [Llir.Cst (Llir.I32Cst 0l); Llir.Return]
     | Float -> [Llir.Cst (Llir.F32Cst 0.0); Llir.Return]
+    | Double -> [Llir.Cst (Llir.F64Cst 0.0); Llir.Return]
     | _ -> []
   in
   let code = tr_block Minic.(func.body) end_seq in

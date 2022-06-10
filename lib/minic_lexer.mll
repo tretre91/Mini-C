@@ -15,6 +15,7 @@
         "int",      INT;
         "long",     LONG;
         "float",    FLOAT;
+        "double",   DOUBLE;
         "bool",     BOOL;
         "void",     VOID;
         "if",       IF;
@@ -96,8 +97,10 @@ rule token = parse
       { CST (CInteger (Char, Int64.of_int (int_of_char (char_of_string c)))) }
   | integer as n
       { let cst = get_int_constant n in CST cst }
-  | float as f
+  | (float as f) 'f'
       { CST (CFloat (float_of_string f)) }
+  | float as d
+      { CST (CDouble (float_of_string d)) }
   | ident as id
       { keyword_or_ident id }
   | ";"

@@ -10,6 +10,7 @@
   let default_value = function
     | Integer t -> Cst (CInteger (t, Int64.zero))
     | Float -> Cst (CFloat 0.0)
+    | Double -> Cst (CDouble 0.0)
     | Bool -> Cst (CBool false)
     | Void -> Cst (CBool true)      (* peu importe, sera détécté par le vérificateur de type *)
     | Ptr _ -> failwith "TODO : ptr default value, parser.mly"
@@ -30,7 +31,7 @@
 %token LPAR RPAR BEGIN END LBRACKET RBRACKET
 %token RETURN SET SEMI COMMA
 %token IF ELSE WHILE FOR
-%token CHAR SHORT INT LONG FLOAT BOOL VOID
+%token CHAR SHORT INT LONG FLOAT DOUBLE BOOL VOID
 %token ADD SUB MUL DIV MOD
 %token EQ NEQ
 %token LT LEQ GT GEQ
@@ -98,6 +99,7 @@ typ:
 | LONG      { Integer Long }
 | LONG INT  { Integer Long }
 | FLOAT     { Float }
+| DOUBLE    { Double }
 | BOOL      { Bool }
 | VOID      { Void }
 | t=typ LBRACKET RBRACKET { Tab (t, make_expr (Cst (CInteger (Int, Int64.minus_one)))) }
