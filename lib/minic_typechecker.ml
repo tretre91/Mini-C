@@ -53,8 +53,10 @@ type scope =
     fonction où l'erreur a eu lieu. *)
 let error scope exn =
   let string_of_integral_type = function
-    | Char -> "char"
-    | Int  -> "int"
+    | Char  -> "char"
+    | Short -> "short"
+    | Int   -> "int"
+    | Long  -> "long"
   in
   let rec string_of_typ = function
     | Integer t -> string_of_integral_type t
@@ -149,8 +151,9 @@ let is_integral = function
 let unify t1 t2 =
   let unify_integral_type t1 t2 =
     match t1, t2 with
+    | Long, _
+    | _, Long -> Long
     | _, _ -> Int
-    (* TODO : ajouter les cas des entiers longs *)
   in
   match t1, t2 with
   | Integer t1', Integer t2' -> Integer (unify_integral_type t1' t2')
@@ -218,7 +221,7 @@ let typecheck_program (prog: prog) =
             let t = unify e1.t e2.t in
             let e1' = get_cast e1 t in
             let e2' = get_cast e2 t in
-            e1', e2', t
+            e1', e2', Bool
           | And | Or ->
             let e1' = get_cast e1 Bool in
             let e2' = get_cast e2 Bool in
@@ -237,7 +240,7 @@ let typecheck_program (prog: prog) =
         { t; const = false; expr = Get x }
       | Read(ptr, offset) ->
         let ptr' = type_expr ptr in
-        let offset' = type_expr offset in
+        let offset' = get_cast (type_expr offset) (Integer Int) in
         begin match ptr'.t with
           | Ptr t ->
             let offset' = get_integer offset' in
@@ -323,7 +326,7 @@ let typecheck_program (prog: prog) =
         end
       | Write (ptr, offset, e) ->
         let ptr' = type_expr !env ptr in
-        let offset' = type_expr !env offset in
+        let offset' = get_cast (type_expr !env offset) (Integer Int) in
         let e' = type_expr !env e in
         begin try
           let offset' = get_integer offset' in

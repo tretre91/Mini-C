@@ -11,6 +11,8 @@
         "true",     CST (CBool true);
         "false",    CST (CBool false);
         "char",     CHAR;
+        "short",    SHORT;
+        "long",     LONG;
         "int",      INT;
         "bool",     BOOL;
         "void",     VOID;
@@ -36,6 +38,16 @@
       Char.chr code
     | _ as c -> c
 
+  let get_int_constant =
+    let max_32_bit = Int64.of_int32 (Int32.max_int) in
+    let min_32_bit = Int64.of_int32 (Int32.min_int) in
+    fun n ->
+      let value = Int64.of_string n in
+      if value > max_32_bit || value < min_32_bit then
+        Minic_ast.CInteger (Long, value)
+      else
+        Minic_ast.CInteger (Int, value)
+
   (* Quitte le programme et affiche un message d'erreur indiquant l'emplacement de l'erreur *)
   let error message pos =
     Printf.fprintf stderr "error at (%d, %d): %s" pos.pos_lnum (pos.pos_cnum - pos.pos_bol) message;
@@ -53,14 +65,12 @@ let oct_char = "\\" (octal | octal octal | octal octal octal)
 let chr = (_ | hex_char | oct_char | valid_escapes)
 let char = "'" chr "'"
 
-let number = digit+
+let number = '-'? digit+
 let alpha = ['a'-'z' 'A'-'Z']
 let ident = alpha (alpha | '_' | digit)*
 let comment = "//"[^'\n']*
 
-(* Règles de reconnaissance 
-   À COMPLÉTER
-*)
+(* Règles de reconnaissance *)
 rule token = parse
   | ['\n']
       { new_line lexbuf; token lexbuf }
@@ -73,7 +83,7 @@ rule token = parse
   | "'" (chr as c) "'"
       { CST (CInteger (Char, Int64.of_int (int_of_char (char_of_string c)))) }
   | number as n
-      { CST (CInteger (Int, Int64.of_int (int_of_string n))) }
+      { let cst = get_int_constant n in CST cst }
   | ident as id
       { keyword_or_ident id }
   | ";"

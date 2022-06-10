@@ -69,10 +69,20 @@ let todo ?msg location =
   in
   failwith (Printf.sprintf "TODO :%s %s" msg location)
 
+(** [escape_string s] renvoie la chaîne s avec tous ses caractères sous format
+    hexadécimal compatible avec WebAssembly ('\xx')
+    par exemple : [escape_string "Bonjour" = "\\42\\6f\\6e\\6a\\6f\\75\\72"] *)
+let escape_string s =
+  let b = Buffer.create (3 * String.length s) in
+  String.iter (fun c -> Printf.bprintf b "\\%02x" (Char.code c)) s;
+  Buffer.contents b
+
 (* Donne la taille d'un objet en octets *)
 let sizeof = function
   | Integer Char -> 1
+  | Integer Short -> 2
   | Integer Int | Bool | Ptr _ -> 4
+  | Integer Long -> 8
   | _ -> failwith "sizeof"
 
 let rec default_value t =
@@ -92,8 +102,11 @@ let rec make_initlist t n l =
 (** Calcule la valeur d'une expression constante *)
 let calc_const_expr e =
   let mask t v =
-    let size = 8 * sizeof t in
-    let mask = Int64.sub (Int64.shift_left 1L size) 1L in
+    let bit_size = 8 * sizeof t in
+    let mask = match bit_size with
+    | 64 -> Int64.minus_one
+    | size -> Int64.sub (Int64.shift_left 1L size) 1L
+    in
     Int64.logand v mask
   in
   let cast_const_expr e target =
@@ -191,7 +204,9 @@ let prog_of_ast ast =
     let rec insert e =
       match e.t, e.value with
       | Integer Char, Integral v -> Buffer.add_int8 buffer (Int64.to_int v)
+      | Integer Short, Integral v -> Buffer.add_int16_le buffer (Int64.to_int v)
       | (Integer Int | Bool), Integral v -> Buffer.add_int32_le buffer (Int64.to_int32 v)
+      | Integer Long, Integral v -> Buffer.add_int64_le buffer v
       | _, List l -> List.iter insert l
       | _, _ -> todo ~msg:"buffer" __LOC__
     in
@@ -276,9 +291,9 @@ let prog_of_ast ast =
             let instr =
               if const then
                 let buffer = buffer_of_initlist l in
-                let data = Buffer.contents buffer in
+                let data = escape_string (Buffer.contents buffer) in
                 persistent_data := data :: !persistent_data;
-                [StaticMemcpy (Get (get_var v), next_data_id (), String.length data)]
+                [StaticMemcpy (Get (get_var v), next_data_id (), Buffer.length buffer)]
               else
                 List.mapi (fun i e -> Write (t, make_ptr t (Get p) (make_size i), e)) l
             in
@@ -332,7 +347,7 @@ let prog_of_ast ast =
           let offset = !static_offset in
           let buffer = buffer_of_initlist l' in
           static_offset := offset + n * (sizeof t);
-          (offset, Buffer.contents buffer) :: static, (v, Ptr t) :: globals, funcs, extern_funcs, Set (v, make_size offset)::init_instr
+          (offset, escape_string (Buffer.contents buffer)) :: static, (v, Ptr t) :: globals, funcs, extern_funcs, Set (v, make_size offset)::init_instr
         | _, _ -> static, (v, t') :: globals, funcs, extern_funcs, Set (v, e') :: init_instr
         end
       | Ast.Function f -> static, globals, tr_fun f :: funcs, extern_funcs, init_instr

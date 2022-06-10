@@ -1,7 +1,9 @@
 (** Représentation des types. *)
 type integral_type =
   | Char
+  | Short
   | Int
+  | Long
 
 type constant =
   | CInteger of integral_type * Int64.t

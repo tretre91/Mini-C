@@ -32,7 +32,7 @@ Le format de sortie est le [format textuel](https://developer.mozilla.org/en-US/
 
 ## Tests
 
-Les tests sont dans le dossier test, un fichier par aspect du langage, triés par ordre chronologique. L'execution des tests nécessite d'avoir [deno](https://deno.land/), l'outil `wat2wasm` du [WebAssembly binary toolkit](https://github.com/WebAssembly/wabt#wabt-the-webassembly-binary-toolkit) et gcc d'installés.
+Les tests sont dans le dossier test, un fichier par aspect du langage, triés par ordre chronologique. L'execution des tests nécessite d'avoir [deno](https://deno.land/), l'outil `wat2wasm` du [WebAssembly binary toolkit](https://github.com/WebAssembly/wabt#wabt-the-webassembly-binary-toolkit), la bibliothèque [patdiff](https://opam.ocaml.org/packages/patdiff/) et gcc d'installés.
 
 Ils peuvent être lancés avec la commande :
 ```
@@ -56,7 +56,7 @@ Les commentaires simples (`// ...`) et multilignes (`/* ... */`) sont supportés
 
 ### Types
 
-Les types disponibles sont `char`, `int`, `bool` et `void` (seulement pour les fonctions).
+Les types disponibles sont `char`, `short`, `int`, `long`, `bool` et `void` (seulement pour les fonctions).
 
 ### Variables
 

@@ -6,7 +6,7 @@ let functions = Hashtbl.create 16
 (** Associe à un type minic un type de données wasm *)
 let dtype_of_typ = function
   | Minic.Void -> None
-  (* | Ast.Integer Long -> Some Wasm.I64 *)
+  | Minic.Integer Ast.Long -> Some Wasm.I64
   | Minic.Integer _ | Minic.Bool -> Some Wasm.I32
   | Minic.Ptr _ -> Some Wasm.I32
   | Minic.Tab _ -> failwith "unreachable"
@@ -15,9 +15,10 @@ let dtype_of_typ = function
     utilisé dans le cas des instructions mémoire par exemple *)
 let extended_dtype_of_typ = function
   | Minic.Void -> None
-  (* | Ast.Integer Long -> Some Wasm.I64 *)
   | Minic.Integer Ast.Char -> Some Wasm.I8
+  | Minic.Integer Ast.Short -> Some Wasm.I16
   | Minic.Integer Ast.Int | Minic.Bool -> Some Wasm.I32
+  | Minic.Integer Ast.Long -> Some Wasm.I64
   | Minic.Ptr _ -> Some Wasm.I32
   | Minic.Tab _ -> failwith "unreachable"
 
@@ -46,12 +47,15 @@ let tr_fdef func =
       | _ -> failwith "not an integer"
     in
     match Minic.(c.t) with
-    | Integer (Char | Int) | Bool -> Llir.I32Cst (Int64.to_int32 (get_integer c))
+    | Integer (Char | Short | Int) | Bool -> Llir.I32Cst (Int64.to_int32 (get_integer c))
+    | Integer Long -> Llir.I64Cst (get_integer c)
     | _ -> failwith __LOC__
   in
   let datatype_of_typ : (Minic.typ -> Llir.datatype) = function
     | Integer Char -> Int8
+    | Integer Short -> Int16
     | Integer Int | Bool -> Int32
+    | Integer Long -> Int64
     | _ -> failwith "TODO"
   in
   let make_op t op =
@@ -70,7 +74,7 @@ let tr_fdef func =
       match op with
       | Ast.Minus ->
         let zero = match t with
-        (* | Integer Long -> Llir.I64Cst Int64.zero *)
+        | Integer Long -> Llir.I64Cst Int64.zero
         | Integer _ -> Llir.I32Cst Int32.zero
         | _ -> failwith __LOC__
         in
@@ -78,7 +82,7 @@ let tr_fdef func =
       | Ast.Not -> tr_expr e (Op (I32, Llir.Not) :: next)
       | Ast.BNot ->
         let minus_one = match t with
-        (* | Integer Long -> Llir.I64Cst Int64.minus_one *)
+        | Integer Long -> Llir.I64Cst Int64.minus_one
         | Integer _ -> Llir.I32Cst Int32.minus_one
         | _ -> failwith __LOC__
         in
@@ -124,7 +128,7 @@ let tr_fdef func =
   in
   let end_seq = match Minic.(func.return) with (* TODO : retirer dans les cas non-void *)
     | Void -> [Llir.Return]
-    (* | Integer Long -> [Llir.Cst (Llir.I64Cst 0L); Llir.Return] *)
+    | Integer Long -> [Llir.Cst (Llir.I64Cst 0L); Llir.Return]
     | Integer _ | Bool -> [Llir.Cst (Llir.I32Cst 0l); Llir.Return]
     | _ -> []
   in

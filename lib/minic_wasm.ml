@@ -55,34 +55,36 @@ let const = function
 
 let cast from t =
   let instr = Llir.(match from, t with
-  | Int8, (Int16 | Int32) -> ["i32.extend8_s"]
-  | Int8, Int64 -> ["i64.extend8_s"]
+  | Int8, (Int8 | Int16 | Int32) -> ["i32.extend8_s"]
+  | Int8, Int64 -> ["i32.extend8_s\ni64.extend_i32_s"]
   | Int8, Float32 -> ["i32.extend8_s\nf32.convert_i32_s"] (* TODO :( *)
   | Int8, Float64 -> ["i32.extend8_s\nf64.convert_i32_s"]
-  | Int16, Int32 -> ["i32.extend16_s"]
-  | Int16, Int64 -> ["i64.extend16_s"]
+  | Int16, Int8 -> []
+  | Int16, (Int16 | Int32) -> ["i32.extend16_s"]
+  | Int16, Int64 -> ["i32.extend16_s\ni64.extend_i32_s"]
   | Int16, Float32 -> ["i32.extend16_s\nf32.convert_i32_s"] (* TODO :( *)
   | Int16, Float64 -> ["i32.extend16_s\nf64.convert_i32_s"]
-  | Int32, Int8 -> []
-  | Int32, Int16 -> []
+  | Int32, (Int8 | Int16 | Int32) -> []
   | Int32, Int64 -> ["i64.extend_i32_s"]
   | Int32, Float32 -> ["f32.convert_i32_s"]
   | Int32, Float64 -> ["f64.convert_i32_s"]
   | Int64, (Int8 | Int16 | Int32) -> ["i32.wrap_i64"]
+  | Int64, Int64 -> []
   | Int64, Float32 -> ["f32.convert_i64_s"]
   | Int64, Float64 -> ["f64.convert_i64_s"]
   | Float32, Int8 -> failwith __LOC__
   | Float32, Int16 -> failwith __LOC__
   | Float32, Int32 -> ["i32.trunc_f32_s"]
   | Float32, Int64 -> ["i64.trunc_f32_s"]
+  | Float32, Float32 -> []
   | Float32, Float64 -> ["f64.promote_f32"]
   | Float64, Int8 -> failwith __LOC__
   | Float64, Int16 -> failwith __LOC__
   | Float64, Int32 -> ["i32.trunc_f64_s"]
   | Float64, Int64 -> ["i64.trunc_f64_s"]
   | Float64, Float32 -> ["f32.demote_f64"]
-  | _, _ when from = t -> []
-  | _, _ -> failwith "unreachable"
+  | Float64, Float64 -> []
+  (* | _, _ -> failwith "unreachable" *)
   ) in
   Instr instr
 

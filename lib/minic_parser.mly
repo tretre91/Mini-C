@@ -29,7 +29,7 @@
 %token LPAR RPAR BEGIN END LBRACKET RBRACKET
 %token RETURN SET SEMI COMMA
 %token IF ELSE WHILE FOR
-%token CHAR INT BOOL VOID
+%token CHAR SHORT INT LONG BOOL VOID
 %token ADD SUB MUL DIV MOD
 %token EQ NEQ
 %token LT LEQ GT GEQ
@@ -90,10 +90,14 @@ variable_decl:
 
 (* Indication de type. *)
 typ:
-| CHAR  { Integer Char }
-| INT   { Integer Int }
-| BOOL  { Bool }
-| VOID  { Void }
+| CHAR      { Integer Char }
+| SHORT     { Integer Short }
+| SHORT INT { Integer Short }
+| INT       { Integer Int }
+| LONG      { Integer Long }
+| LONG INT  { Integer Long }
+| BOOL      { Bool }
+| VOID      { Void }
 | t=typ LBRACKET RBRACKET { Tab (t, make_expr (Cst (CInteger (Int, Int64.minus_one)))) }
 ;
 
