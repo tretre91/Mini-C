@@ -50,6 +50,7 @@ type fun_def = {
 
 type prog = {
   static: (int option * string) list;
+  static_pages: int;
   globals: (string * Wasm.dtype) list;
   functions: fun_def list;
   extern_functions: fun_def list;

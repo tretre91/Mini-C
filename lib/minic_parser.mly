@@ -6,6 +6,18 @@
   let make_expr e =
     { t = Void; const = false; expr = e }
   
+  (** Indique si un attribut est valide *)
+  let is_valid_attribute =
+    let module StrSet = Set.Make(String) in
+    let valid_attributes = [
+      "std";
+      "internal";
+    ]
+    in
+    let s = List.fold_left (fun ids attr -> StrSet.add attr ids) StrSet.empty valid_attributes in
+    fun attribute ->
+      StrSet.mem attribute s
+  
   (* Valeur par défaut d'une variable d'un type donné *)
   let default_value = function
     | Integer t -> Cst (CInteger (t, Int64.zero))
@@ -13,7 +25,7 @@
     | Double -> Cst (CDouble 0.0)
     | Bool -> Cst (CBool false)
     | Void -> Cst (CBool true)      (* peu importe, sera détécté par le vérificateur de type *)
-    | Ptr _ -> failwith "TODO : ptr default value, parser.mly"
+    | Ptr _ -> Cst (CInteger (Int, Int64.zero))
     | Tab (_, _) -> InitList []
   
   (* Traduit une boucle for en boucle while *)
@@ -28,6 +40,7 @@
 (* Déclaration des lexèmes *)
 %token <Minic_ast.constant> CST
 %token <string> IDENT
+%token EXTERN
 %token LPAR RPAR BEGIN END LBRACKET RBRACKET
 %token RETURN SET SEMI COMMA
 %token IF ELSE WHILE FOR
@@ -75,8 +88,7 @@ program:
 (* Une déclaration globale, soit des variables globales soit une fonction *)
 global_declaration:
 | vars=variable_decl SEMI { List.map (fun v -> Variable v) vars }
-| func=function_decl { [Function func] }
-| func=predeclaration { [ForwardDecl func] }
+| func=function_d { [Function func] }
 ;
 
 (* Déclaration de variables. *)
@@ -92,28 +104,40 @@ variable_decl:
 
 (* Indication de type. *)
 typ:
-| CHAR      { Integer Char }
-| SHORT     { Integer Short }
-| SHORT INT { Integer Short }
-| INT       { Integer Int }
-| LONG      { Integer Long }
-| LONG INT  { Integer Long }
-| FLOAT     { Float }
-| DOUBLE    { Double }
-| BOOL      { Bool }
-| VOID      { Void }
+| CHAR          { Integer Char }
+| SHORT         { Integer Short }
+| SHORT INT     { Integer Short }
+| INT           { Integer Int }
+| LONG          { Integer Long }
+| LONG INT      { Integer Long }
+| LONG LONG     { Integer Long }
+| LONG LONG INT { Integer Long }
+| FLOAT         { Float }
+| DOUBLE        { Double }
+| BOOL          { Bool }
+| VOID          { Void }
+| t=typ MUL     { Ptr t }
 | t=typ LBRACKET RBRACKET { Tab (t, make_expr (Cst (CInteger (Int, Int64.minus_one)))) }
 ;
 
-(* Déclaration de fonction. *)
-function_decl:
-| t=typ f=IDENT LPAR p=separated_list(COMMA, parameter) RPAR b=block
-    { { name=f; params=p; return=t; body=b } }
+(* Déclaration d'attributs, ne renvoie que les attributs valides *)
+attribute:
+| LBRACKET LBRACKET l=separated_list(COMMA, IDENT) RBRACKET RBRACKET
+  { List.filter is_valid_attribute l } (* TODO : warning sur les attributs invalides *)
+| EXTERN { ["extern"] }
 ;
 
-predeclaration:
+(* Déclaration de fonction. *)
+function_d:
+| func=function_decl { func }
+| attr=attribute f=function_d { { f with attributes = attr @ f.attributes } }
+;
+
+function_decl:
+| t=typ f=IDENT LPAR p=separated_list(COMMA, parameter) RPAR b=block
+    { { name=f; params=p; return=t; body=b; is_forward_decl=false; attributes=[] } }
 | t=typ f=IDENT LPAR p=separated_list(COMMA, parameter) RPAR SEMI
-    { { name=f; params=p; return=t; body=[] } }
+    { { name=f; params=p; return=t; body=[]; is_forward_decl=true; attributes=[] } }
 ;
 
 (* Paramètre formel d'une fonction *)
@@ -143,6 +167,7 @@ instruction:
 | v=variable_decl SEMI                           { Decl(v) }
 | a=assignement SEMI                             { let id, e = a in Set(id, e) }
 | s=subscript SET e=expression SEMI              { let id, i = s in Write (make_expr (Get id), i, e) }
+| MUL addr=expression SET e=expression SEMI      { Write (addr, make_expr (Cst (CInteger (Int, 0L))), e) }
 | i=if_sequence                                  { i }
 | WHILE LPAR c=expression RPAR b=block           { While(c, b) }
 | FOR LPAR init=for_init_statement SEMI cond=option(expression) SEMI i=separated_list(COMMA, assignement) RPAR b=block
@@ -174,6 +199,7 @@ expression:
 | ADD e=expression                  { e }
 | NOT e=expression                  { make_expr (UnaryOperator(Not, e)) }
 | BNOT e=expression                 { make_expr (UnaryOperator(BNot, e)) }
+| MUL e=expression                  { make_expr (Read(e, make_expr (Cst (CInteger (Int, 0L))))) }
 | e1=expression ADD e2=expression   { make_expr (BinaryOperator(Add, e1, e2)) }
 | e1=expression SUB e2=expression   { make_expr (BinaryOperator(Sub, e1, e2)) }
 | e1=expression MUL e2=expression   { make_expr (BinaryOperator(Mult, e1, e2)) }

@@ -1,17 +1,14 @@
 open Printf
 open Wasm
 
-(** Affiche une liste de chaînes de caractère *)
-let print_string_list sep channel l =
-  let rec print_string_list l =
-    match l with
-    | [] -> ()
-    | [e] -> output_string channel e
-    | hd::tl ->
-      fprintf channel "%s%s" hd sep; 
-      print_string_list tl
-  in
-  print_string_list l
+(** Taille d'un page mémoire WebAssembly en octets *)
+let page_size = 65536
+
+(** Taille de la pile (en nombre de pages) *)
+let stack_size = 16
+
+(** Taille initiale du tas (en nombre de pages) *)
+let initial_heap_size = 64
 
 (* Instructions de gestion des variables *)
 let global_get v = Instr ["global.get"; (sprintf "$%s" v)]
@@ -45,6 +42,8 @@ let store dtype =
   Instr [instr]
 
 let mem_init id = Instr ["memory.init"; string_of_int id]
+let mem_size = Instr ["memory.size"]
+let mem_grow = Instr ["memory.grow"]
 
 (* Instructions numériques *)
 let const = function
@@ -155,6 +154,33 @@ let default_instr = function
   | F64 -> [const (Llir.F64Cst 0.0)]
   | _   -> failwith __LOC__ (* unreachable *)
 
+(* Fonctions internes *)
+let __sbrk =
+  let body = [
+    call "__heap_end";
+    local_set 0;
+    global_get "__heap_size";
+    mem_grow;
+    global_get "__heap_size";
+    const (Llir.I32Cst 2l);
+    mul I32;
+    global_set "__heap_size";
+    local_get 0;
+    return;
+  ]
+  in
+  func "__sbrk" [] [I32] (Some I32) body
+
+let __heap_end =
+  let body = [
+    mem_size;
+    const (Llir.I32Cst 65536l);
+    mul I32;
+    return;
+  ]
+  in
+  func "__heap_end" [] [] (Some I32) body
+
 (** Traduction d'un programme *)
 let tr_prog prog =
   let tr_fdef fdef =
@@ -212,17 +238,42 @@ let tr_prog prog =
   let tr_extern_func (fdef: Llir.fun_def) =
     ImportedFunction (fdef.name, fdef.params, fdef.return)
   in
+  (* traduction des variables globales *)
   let globals = List.map (fun (v, t) -> Global (v, Mut, t, default_instr t)) Llir.(prog.globals) in
+  (* traduction des données statiques *)
   let data = List.map (fun (addr, data) -> Data (addr, data)) Llir.(prog.static) in
+  (* calcul du nombre de pages mémoires initial du programme *)
+  let data_size = Llir.(prog.static_pages) in
+  let memory_size = data_size + stack_size + initial_heap_size in
+  (* calcul des valeurs initiales des variables spéciales *)
+  let make_i32_const i = const (Llir.I32Cst (Int32.of_int i)) in
+  let heap_start = make_i32_const (page_size * (data_size + stack_size)) in
+  let sp_initial_value = make_i32_const (page_size * data_size) in
   Module (
        Start "__init"
-    :: (List.map tr_extern_func Llir.(prog.extern_functions))
-    @ [Memory 2;
-       Global ("__sp", Mut, I32, [const (Llir.I32Cst 65536l)])]
+    ::(List.map tr_extern_func Llir.(prog.extern_functions))
+    @ [Memory (memory_size);
+       Global ("__sp", Mut, I32, [sp_initial_value]);
+       Global ("__heap_size", Mut, I32, [make_i32_const initial_heap_size]);
+       Global ("__heap_start", Const, I32, [heap_start]);]
     @  data
     @  globals
-    @  (List.map tr_fdef Llir.(prog.functions))
+    @  __sbrk::__heap_end::(List.map tr_fdef Llir.(prog.functions))
   )
+
+
+(** Affiche une liste de chaînes de caractère *)
+let print_string_list sep channel l =
+  let rec print_string_list l =
+    match l with
+    | [] -> ()
+    | [e] -> output_string channel e
+    | hd::tl ->
+      fprintf channel "%s%s" hd sep; 
+      print_string_list tl
+  in
+  print_string_list l
+
 
 (** Affichage d'un programme *)
 let print_prog channel p =
@@ -279,7 +330,12 @@ let print_prog channel p =
       printfi ")\n"
     (* Affichage d'une déclaration de variable globale *)
     | Global (name, q, t, seq) ->
-      printfi "(global $%s (%s %s)\n" name (string_of_qualifier q) (string_of_typ t);
+      let st = string_of_typ t in
+      let typ = match q with
+        | Mut -> sprintf "(mut %s)" st
+        | Const -> st
+      in
+      printfi "(global $%s %s\n" name typ;
       print_seq 2 seq;
       printfi ")\n"
     (* Affichage d'une fonction importée *)

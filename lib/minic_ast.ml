@@ -73,6 +73,8 @@ type fun_def = {
   params: (string * typ) list;
   return: typ;
   body: block;
+  is_forward_decl: bool;
+  attributes: string list;
 }
 
 (** Type d'un déclaration dans la portée globale (une déclaration de variable
@@ -80,7 +82,6 @@ type fun_def = {
 type global_decl =
   | Variable of var_decl
   | Function of fun_def
-  | ForwardDecl of fun_def
 
 (** Représentation des programmes.
     Un programme est simplement une suite de déclarations de variables ou de fonctions. *)

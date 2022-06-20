@@ -22,11 +22,12 @@
         "else",     ELSE;
         "while",    WHILE;
         "for",      FOR;
+        "extern",   EXTERN;
       ] ;
     fun s ->
       try  Hashtbl.find h s
       with Not_found -> IDENT(s)
-  
+
   let char_of_string s =
     let len = String.length s in
     match s.[0] with
@@ -42,7 +43,7 @@
         | 't' -> 9
         | 'v' -> 11
         | ('\'' | '\"' | '?' | '\\') as c -> Char.code c
-        | _ -> failwith "TODO : special escape characters"
+        | _ -> failwith ("invalid escape sequence " ^ s)
       in
       Char.chr code
     | _ as c -> c
@@ -80,19 +81,15 @@ let integer = '-'? (number | "0x" hex+ | "0b" ['0''1']+)
 let float = '-'? (number '.' (number ?) | '.' number)
 
 let alpha = ['a'-'z' 'A'-'Z']
-let ident = alpha (alpha | '_' | digit)*
-let comment = "//"[^'\n']*
+let ident = (alpha | '_') (alpha | '_' | digit)*
+let space = [' ' '\t' '\r']
 
 (* Règles de reconnaissance *)
 rule token = parse
   | ['\n']
       { new_line lexbuf; token lexbuf }
-  | [' ' '\t' '\r']+
+  | space+
       { token lexbuf }
-  | comment
-      { token lexbuf }
-  | "/*"
-      { multiline_comment (lexeme_start_p lexbuf) lexbuf }
   | "'" (chr as c) "'"
       { CST (CInteger (Char, Int64.of_int (int_of_char (char_of_string c)))) }
   | integer as n
@@ -165,12 +162,3 @@ rule token = parse
       { error ("Unknown character : " ^ (lexeme lexbuf)) (lexeme_start_p lexbuf) }
   | eof
       { EOF }
-and multiline_comment start_pos = parse
-  | ['\n']
-      { new_line lexbuf; multiline_comment start_pos lexbuf }
-  | "*/"
-      { token lexbuf }
-  | _
-      { multiline_comment start_pos lexbuf }
-  | eof
-      { error "Forgot to close this multiline comment" start_pos }

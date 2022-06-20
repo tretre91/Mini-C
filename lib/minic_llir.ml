@@ -59,6 +59,7 @@ let tr_fdef func =
     | Integer Long -> Int64
     | Float -> Float32
     | Double -> Float64
+    | Ptr _ -> Int32
     | _ -> failwith "TODO"
   in
   let make_op t op =
@@ -134,7 +135,7 @@ let tr_fdef func =
   let end_seq = match Minic.(func.return) with
     | Void -> [Llir.Return]
     | Integer Long -> [Llir.Cst (Llir.I64Cst 0L); Llir.Return]
-    | Integer _ | Bool -> [Llir.Cst (Llir.I32Cst 0l); Llir.Return]
+    | Integer _ | Bool | Ptr _ -> [Llir.Cst (Llir.I32Cst 0l); Llir.Return]
     | Float -> [Llir.Cst (Llir.F32Cst 0.0); Llir.Return]
     | Double -> [Llir.Cst (Llir.F64Cst 0.0); Llir.Return]
     | _ -> []
@@ -162,6 +163,7 @@ let tr_prog prog =
 
   {
     Llir.static = static;
+    Llir.static_pages = Minic.(prog.static_pages);
     Llir.globals = List.map (fun (v, t) -> v, Option.get (dtype_of_typ t)) Minic.(prog.globals);
     Llir.functions = List.map tr_fdef Minic.(prog.functions);
     Llir.extern_functions = List.map (fun f -> { (tr_fdef f) with code = [] }) Minic.(prog.extern_functions);

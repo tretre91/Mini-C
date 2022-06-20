@@ -1,7 +1,6 @@
 open Minic_ast
 (* Pour représenter les environnements associant chaque variable à son type. *)
 module Env = Map.Make(String)
-module StrSet = Set.Make(String)
 
 (** Exception levée lorsque l'on tente d'assigner à une variable une expression
     du mauvais type *)
@@ -133,10 +132,11 @@ type environment = {
 let get_cast e t =
   match e.t, t with
   | _, _ when e.t = t -> e
-  | Integer _, (Integer _ | Float | Double | Bool)
+  | Integer _, (Integer _ | Float | Double | Bool | Ptr _)
   | Float, (Integer _ | Double | Bool)
   | Double, (Integer _ | Float | Bool)
-  | Bool, (Integer _ | Float) -> { t; const = e.const; expr = Cast (e, e.t, t) }
+  | Bool, (Integer _ | Float)
+  | Ptr _, (Integer _ | Ptr _) -> { t; const = e.const; expr = Cast (e, e.t, t) }
   | _, _ -> raise (Bad_cast (e.t, t))
 
 (** Convertit une expression en une expression entière *)
@@ -163,6 +163,10 @@ let unify t1 t2 =
   | _, _ when t1 = t2 -> t1
   | Bool, _ -> t2
   | _, Bool -> t1
+  | Ptr _, (Double | Float)
+  | (Double | Float), Ptr _ -> failwith "types cannot be unified" (* TODO *)
+  | Ptr _, _ -> t1
+  | _, Ptr _ -> t2
   | Double, _
   | _, Double -> Double
   | Float, _
@@ -308,9 +312,9 @@ let typecheck_program (prog: prog) =
           Bad_cast _ -> raise (Bad_assignement (tv, x, te))        
   in
 
-  let typecheck_function ?is_forward_decl env (fdef: fun_def) =
+  let typecheck_function env (fdef: fun_def) =
     (* Si la fonction est un prédéclaration on considère qu'elle renvoie une valeur *)
-    let returns = ref (Option.is_some is_forward_decl) in
+    let returns = ref (fdef.is_forward_decl) in
     (* Vérification du bon typage des instructions d'un bloc *)
     let rec typecheck_block env b =
       let env = ref env in
@@ -420,41 +424,51 @@ let typecheck_program (prog: prog) =
       with
         e -> error Global e
       end
-    | Function f ->
-      begin match Hashtbl.find_opt functions f.name with
-      | None | (Some (ForwardDecl _)) ->
+    | Function f when f.is_forward_decl -> begin
+      match Hashtbl.find_opt functions f.name with
+      | None ->
         begin try
+          let env', f' = typecheck_function env f in
+          Hashtbl.add functions f.name f';
+          (env', vars), Function f'
+        with
+          e -> error (Local f.name) e
+        end
+      | Some f when f.is_forward_decl -> error Global (Failure (Printf.sprintf "trying to declare function %s which is already declared" f.name))
+      | Some f when not f.is_forward_decl -> error Global (Failure (Printf.sprintf "redeclaration of function %s" f.name))
+      | _ -> failwith __LOC__
+      end
+    | Function f -> begin
+      let add_func f =
+        try
           let env' = { env with functions = Env.remove f.name env.functions } in
           let env'', f' = typecheck_function env' f in
           (env'', vars), Function f'
         with
           e -> error (Local f.name) e
-        end
-      | Some (Function _) -> error Global (Failure (Printf.sprintf "redefinition of function %s" f.name))
-      | _ -> failwith __LOC__
-      end
-    | ForwardDecl f ->
-      begin match Hashtbl.find_opt functions f.name with
-      | None ->
-        begin try
-          let env', f' = typecheck_function ~is_forward_decl:true env f in
-          Hashtbl.add functions f.name (ForwardDecl f');
-          (env', vars), ForwardDecl f'
-        with
-          e -> error (Local f.name) e
-        end
-      | Some (ForwardDecl _) -> error Global (Failure (Printf.sprintf "redeclaration of function %s" f.name))
-      | Some (Function _) -> error Global (Failure (Printf.sprintf "trying to declare function %s which is already declared" f.name))
-      | _ -> failwith __LOC__
+      in
+      match Hashtbl.find_opt functions f.name with
+      | None -> add_func f
+      | Some f when f.is_forward_decl -> add_func f
+      | Some _ -> error Global (Failure (Printf.sprintf "redefinition of function %s" f.name))
       end
   ) ({ functions=Env.empty; variables=Env.empty }, Env.empty) prog
   in
   
+  let has_attribute f attribute =
+    List.mem attribute f.attributes
+  in
+
   (* Vérification des prédéclarations (TODO) *)
   Hashtbl.iter (fun _ f ->
-    match f with
-    | ForwardDecl _ -> ()
-    | _ -> ()
+    let is_extern = has_attribute f "extern" in
+    if f.is_forward_decl then begin
+      if not is_extern then
+        failwith ("No definition found for function " ^ f.name)
+      end
+    else
+      if is_extern then
+        failwith (Printf.sprintf "Cannot define a function which is declared extern (%s)" f.name)
   ) functions;
   
   ast

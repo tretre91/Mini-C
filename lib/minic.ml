@@ -59,6 +59,7 @@ type fun_def = {
 type prog = {
   static: (int * string) list; (* Données mémoire *)
   persistent: string list; (* Données persistentes, par ex : initialisateur des tableaux*)
+  static_pages: int;
   globals: (string * typ) list;
   functions: fun_def list;
   extern_functions: fun_def list;
@@ -93,7 +94,7 @@ let rec default_value t =
   | Integer _ -> Cst { t; value = Integral Int64.zero }
   | Float | Double -> Cst { t; value = Floating 0.0 }
   | Void -> failwith __LOC__ (* unreachable *)
-  | Ptr _ -> failwith __LOC__ (* unreachable *)
+  | Ptr _ -> Cst { t; value = Integral Int64.zero }
   | Tab (t, n) -> InitList (true, List.init n (fun _ -> default_value t))
   
 let rec make_initlist t n l =
@@ -361,6 +362,12 @@ let prog_of_ast ast =
     }
   in
 
+  (* On itère sur toutes les déclarations globales, on récupère 
+     - les variables globales
+     - les instructions servant à les initialiser 
+     - les définitions de fonctions
+     - les fonctions déclarées extern
+     - les données qui devront être placées en mémoire statique *)
   let static_offset = ref 0 in
   let static, globals, funcs, extern_funcs, init_instr =
     List.fold_left (fun (static, globals, funcs, extern_funcs, init_instr) global ->
@@ -378,24 +385,53 @@ let prog_of_ast ast =
           (offset, escape_string (Buffer.contents buffer)) :: static, (v, Ptr t) :: globals, funcs, extern_funcs, Set (v, make_size offset)::init_instr
         | _, _ -> static, (v, t') :: globals, funcs, extern_funcs, Set (v, e') :: init_instr
         end
-      | Ast.Function f -> static, globals, tr_fun f :: funcs, extern_funcs, init_instr
-      | Ast.ForwardDecl f ->
+      | Ast.Function f when f.is_forward_decl && List.mem "std" f.attributes ->
         let f' = { (tr_fun f) with locals = []; body = [] } in
         static, globals, funcs, f' :: extern_funcs, init_instr
+      | Ast.Function f when not f.is_forward_decl ->
+        static, globals, tr_fun f :: funcs, extern_funcs, init_instr
+      | Ast.Function _ ->
+        static, globals, funcs, extern_funcs, init_instr
     ) ([], [], [], [], []) ast
   in
+
   (* on crée une fonction init qui contient les initialisations de variables globales *)
   let init_fun = {
     name = "__init";
     params = [];
     locals = [];
     return = Void;
-    body = List.rev init_instr;
+    body = init_instr;
   }
+  in
+  (* on calcule le nombre de pages utilisées par la section de données statiques *)
+  let open Minic_wasm in
+  let static_pages = (!static_offset / page_size) + (if !static_offset mod page_size <> 0 then 1 else 0) in
+  (* on ajoute les instructions nécessaire à l'initialisation de la bibliothèque malloc si stdlib.h est inclus *)
+  let init_fun =
+    let heap_start = page_size * (static_pages + stack_size) in
+    let init_first_block =
+      let first_block_size = page_size * initial_heap_size - 16 in
+      let ptr = make_ptr (Integer Long) (Get "__first_block") (make_size (-1)) in
+      let value = Cst { t = Integer Long; value = Integral (Int64.of_int first_block_size) } in
+      Write (Integer Long, ptr, value)
+    in
+    if Hashtbl.mem Preprocessor.defines "__HAS_STDLIB" then
+      let body' = List.rev (
+          Expr (Call ("free", [Get "__first_block"]))
+        ::init_first_block
+        ::Set ("__first_block", make_size (heap_start + 8))
+        ::init_fun.body
+      )
+      in
+      { init_fun with body = body' }
+    else
+      init_fun
   in
   {
     static;
     persistent = List.rev (!persistent_data);
+    static_pages;
     globals;
     extern_functions = extern_funcs;
     functions = init_fun :: funcs
