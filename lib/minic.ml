@@ -253,13 +253,18 @@ let prog_of_ast ast =
   in
 
   (* Fonction de traduction d'un type *)
-  let rec tr_typ = function
-    | Ast.Integer t -> Integer t
-    | Ast.Float -> Float
-    | Ast.Double -> Double
-    | Ast.Bool -> Bool
-    | Ast.Void -> Void
-    | Ast.Ptr t -> Ptr (tr_typ t)
+  let rec tr_typ typ =
+    let t = match typ with
+      | Ast.Mut t -> t
+      | Ast.Const t -> t
+    in
+    match t with
+    | Integer t -> Integer t
+    | Float -> Float
+    | Double -> Double
+    | Bool -> Bool
+    | Void -> Void
+    | Ptr t -> Ptr (tr_typ t)
     | Tab (t, n) ->
       let n' = calc_const_expr (tr_expr n) in
       let { t = _; value = v } = n' in

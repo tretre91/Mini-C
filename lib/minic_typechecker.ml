@@ -58,6 +58,9 @@ let error scope exn =
     | Long  -> "long"
   in
   let rec string_of_typ = function
+    | Mut t -> string_of_plain_type t
+    | Const t -> "const " ^ (string_of_plain_type t) 
+  and string_of_plain_type = function
     | Integer t -> string_of_integral_type t
     | Float -> "float"
     | Double -> "double"
@@ -71,16 +74,17 @@ let error scope exn =
     | Global -> "global scope"
     | Local f -> "function " ^ f
   in
+  let open Printf in
   let error =
     match exn with
     | Bad_assignement (tv, var, te) ->
-      Printf.sprintf "cannot assign a value of type %s to variable '%s' of type %s" (string_of_typ te) var (string_of_typ tv)
+      sprintf "cannot assign a value of type %s to variable '%s' of type %s" (string_of_typ te) var (string_of_typ tv)
     | Bad_condition (context, te) ->
-      Printf.sprintf "expecting a bool expression in %s's condition, got %s" context (string_of_typ te)
+      sprintf "expecting a bool expression in %s's condition, got %s" context (string_of_typ te)
     | Undefined_variable var ->
       "undefined variable " ^ var
     | Void_variable var ->
-      Printf.sprintf "'void %s': cannot define a variable of type void" var
+      sprintf "'void %s': cannot define a variable of type void" var
     | Undefined_function f ->
       "call to undefined function " ^ f
     | Unary_operator_mismatch (op, t) ->
@@ -101,25 +105,25 @@ let error scope exn =
       | BAnd | BOr | BXor            -> "a bitwise", "of type int"
       | Lsl | Asr                    -> "a shift", "of type int"
       in
-      Printf.sprintf "%s operator expects its arguments to be %s, got %s and %s" op_type expected st1 st2
+      sprintf "%s operator expects its arguments to be %s, got %s and %s" op_type expected st1 st2
     | Bad_function_arg (f, param, tp, te) ->
       let stp = string_of_typ tp in
       let ste = string_of_typ te in
-      Printf.sprintf "in call to %s, parameter '%s' expects an argument of type %s, got %s" f param stp ste
+      sprintf "in call to %s, parameter '%s' expects an argument of type %s, got %s" f param stp ste
     | Return_value_mismatch (expected, got) ->
-      Printf.sprintf "cannot return a value of type %s from a %s function" (string_of_typ expected) (string_of_typ got)
+      sprintf "cannot return a value of type %s from a %s function" (string_of_typ expected) (string_of_typ got)
     | Initializer_list_mismatch (expr_t, list_t) ->
-      Printf.sprintf "cannot use a value of type %s in an initializer list of type %s" (string_of_typ expr_t) (string_of_typ list_t)
+      sprintf "cannot use a value of type %s in an initializer list of type %s" (string_of_typ expr_t) (string_of_typ list_t)
     | Not_const_initializer v ->
-      Printf.sprintf "value assigned to %s is not constant" v
+      sprintf "value assigned to %s is not constant" v
     | Bad_cast (t1, t2) ->
-      Printf.sprintf "cannot convert a value of type %s to type %s" (string_of_typ t1) (string_of_typ t2)
+      sprintf "cannot convert a value of type %s to type %s" (string_of_typ t1) (string_of_typ t2)
     | Not_a_pointer t ->
-      Printf.sprintf "variable of type %s cannot be accessed as a pointer" (string_of_typ t)
+      sprintf "variable of type %s cannot be accessed as a pointer" (string_of_typ t)
     | Failure m -> m
     | e -> raise e
   in
-  failwith (Printf.sprintf "Type error in %s: %s" prefix error)
+  failwith (sprintf "Type error in %s: %s" prefix error)
 
 (** Type représentant l'environnement, les variables accessibles et les fonctions
     du programme *)
@@ -128,10 +132,16 @@ type environment = {
   variables: typ Env.t
 }
 
+let get_type = function
+  | Mut t -> t
+  | Const t -> t
+
 (** Trouve la conversion appropriée vers un type cible pour une expression donnée *)
 let get_cast e t =
-  match e.t, t with
-  | _, _ when e.t = t -> e
+  let source_type = get_type e.t in
+  let target_type = get_type t in
+  match source_type, target_type with
+  | _, _ when source_type = target_type -> e
   | Integer _, (Integer _ | Float | Double | Bool | Ptr _)
   | Float, (Integer _ | Double | Bool)
   | Double, (Integer _ | Float | Bool)
@@ -141,13 +151,14 @@ let get_cast e t =
 
 (** Convertit une expression en une expression entière *)
 let get_integer e =
-  match e.t with
+  match get_type e.t with
   | Integer _ -> e
-  | Bool -> get_cast e (Integer Int)
+  | Bool -> get_cast e (Mut (Integer Int))
   | _ -> failwith "expression is not an integer"
 
 let is_integral = function
-  | Integer _ -> true
+  | Mut Integer _ -> true
+  | Const Integer _ -> true
   | _ -> false
 
 (** Trouve le type résultat d'une opération binaire *)
@@ -158,30 +169,37 @@ let unify t1 t2 =
     | _, Long -> Long
     | _, _ -> Int
   in
-  match t1, t2 with
-  | Integer t1', Integer t2' -> Integer (unify_integral_type t1' t2')
-  | _, _ when t1 = t2 -> t1
-  | Bool, _ -> t2
-  | _, Bool -> t1
-  | Ptr _, (Double | Float)
-  | (Double | Float), Ptr _ -> failwith "types cannot be unified" (* TODO *)
-  | Ptr _, _ -> t1
-  | _, Ptr _ -> t2
-  | Double, _
-  | _, Double -> Double
-  | Float, _
-  | _, Float -> Float
-  | _, _ -> failwith "types cannot be unified"
+  let t1 = get_type t1 in
+  let t2 = get_type t2 in
+  let t = match t1, t2 with
+    | Integer t1', Integer t2' -> Integer (unify_integral_type t1' t2')
+    | _, _ when t1 = t2 -> t1
+    | Bool, _ -> t2
+    | _, Bool -> t1
+    | Ptr _, (Double | Float)
+    | (Double | Float), Ptr _ -> failwith "types cannot be unified" (* TODO *)
+    | Ptr _, _ -> t1
+    | _, Ptr _ -> t2
+    | Double, _
+    | _, Double -> Double
+    | Float, _
+    | _, Float -> Float
+    | _, _ -> failwith "types cannot be unified"
+  in
+  Const t
 
 (** Vérification du bon typage d'un programme.
     Renvoie l'ast typé *)
 let typecheck_program (prog: prog) =
-  let type_constant = function
-    | CInteger (t, _) -> Integer t
-    | CFloat _ -> Float
-    | CDouble _ -> Double
-    | CBool _ -> Bool
-    | CIList _ -> failwith "never reached, initializer lists are not treated as constants in this step"
+  let type_constant c =
+    let t = match c with
+      | CInteger (t, _) -> Integer t
+      | CFloat _ -> Float
+      | CDouble _ -> Double
+      | CBool _ -> Bool
+      | CIList _ -> failwith "never reached, initializer lists are not treated as constants in this step"
+    in
+    Const t
   in
   (* Vérification du bon typage et calcul du type d'une expression dans un
      environnement donné. *)
@@ -209,9 +227,9 @@ let typecheck_program (prog: prog) =
           try
             let e' = match op with
               | Minus ->
-                let t = unify e.t (Integer Int) in (* TODO : pourquoi ? *)
+                let t = unify e.t (Const (Integer Int)) in (* TODO : pourquoi ? *)
                 get_cast e t
-              | Not  -> get_cast e Bool
+              | Not  -> get_cast e (Const Bool)
               | BNot -> get_integer e
             in
             { t = e'.t; const = e'.const; expr = UnaryOperator(op, e') }
@@ -234,11 +252,12 @@ let typecheck_program (prog: prog) =
             let t = unify e1.t e2.t in
             let e1' = get_cast e1 t in
             let e2' = get_cast e2 t in
-            e1', e2', Bool
+            e1', e2', (Const Bool)
           | And | Or ->
-            let e1' = get_cast e1 Bool in
-            let e2' = get_cast e2 Bool in
-            e1', e2', Bool
+            let target_type = Const Bool in
+            let e1' = get_cast e1 target_type in
+            let e2' = get_cast e2 target_type in
+            e1', e2', target_type
           | _ -> failwith ""
         with
           | _ -> raise (Binary_operator_mismatch (op, e1.t, e2.t))
@@ -246,15 +265,15 @@ let typecheck_program (prog: prog) =
         { t; const = e1'.const && e2'.const; expr = BinaryOperator(op, e1', e2') }
       | Get(x) ->
         let t =  match Env.find_opt x env.variables with
-        | Some (Tab (t, _)) -> Ptr t
+        | Some (Mut Tab (t, _) | Const Tab (t, _)) -> (Const (Ptr t))
         | Some t -> t
         | None -> raise (Undefined_variable x)
         in
         { t; const = false; expr = Get x }
       | Read(ptr, offset) ->
         let ptr' = type_expr ptr in
-        let offset' = get_cast (type_expr offset) (Integer Int) in
-        begin match ptr'.t with
+        let offset' = get_cast (type_expr offset) (Const (Integer Int)) in
+        begin match get_type ptr'.t with
           | Ptr t ->
             let offset' = get_integer offset' in
             { t; const = false; expr = Read (ptr', offset') }
@@ -295,10 +314,10 @@ let typecheck_program (prog: prog) =
       let e' = type_expr env e in
       let te = e'.t in
       match tv, te with
-      | Void, _ -> raise (Void_variable x)
-      | Tab (t, n), _ ->
+      | (Const Void | Mut Void), _ -> raise (Void_variable x)
+      | Const (Tab (t, n)), _ ->
         let n' = get_integer (type_expr env n) in
-        let t' = Tab (t, n') in
+        let t' = Const (Tab (t, n')) in
         let env' = { env with variables = Env.add x t' env.variables } in
         let local_env' = Env.add x () local_vars in
         (env', local_env'), (x, t', e')
@@ -330,7 +349,8 @@ let typecheck_program (prog: prog) =
       | Set(x, e) ->
         let e' = type_expr !env e in
         let t_var = match Env.find_opt x !env.variables with
-          | Some t -> t
+          | Some (Const _) -> failwith (Printf.sprintf "Cannot modify const variable '%s'" x)
+          | Some (Mut t) -> Mut t
           | None -> raise (Undefined_variable x)
         in
         begin
@@ -339,14 +359,15 @@ let typecheck_program (prog: prog) =
         end
       | Write (ptr, offset, e) ->
         let ptr' = type_expr !env ptr in
-        let offset' = get_cast (type_expr !env offset) (Integer Int) in
+        let offset' = get_cast (type_expr !env offset) (Const (Integer Int)) in
         let e' = type_expr !env e in
         begin try
           let offset' = get_integer offset' in
-          match ptr'.t with
-          | Ptr t ->
-            let e' = get_cast e' t in
+          match get_type ptr'.t with
+          | Ptr (Mut t) ->
+            let e' = get_cast e' (Mut t) in
             Write (ptr', offset', e')
+          | Ptr (Const _) -> failwith "Cannot write to a pointer to const value"
           | _ -> raise (Not_a_pointer ptr'.t)
         with
           Bad_cast (from, to_) -> raise (Bad_assignement (to_, "[ptr]", from))
@@ -355,7 +376,7 @@ let typecheck_program (prog: prog) =
           let cond' = type_expr !env cond in
           begin
             try
-              let cond'' = get_cast cond' Bool in
+              let cond'' = get_cast cond' (Const Bool) in
               let t' = typecheck_block !env t in
               let f' = typecheck_block !env f in
               If (cond'', t', f')
@@ -366,7 +387,7 @@ let typecheck_program (prog: prog) =
         let cond' = type_expr !env cond in
         begin
           try
-            let cond'' = get_cast cond' Bool in
+            let cond'' = get_cast cond' (Const Bool) in
             let b' = typecheck_block !env b in
             While (cond'', b')
           with
@@ -375,7 +396,7 @@ let typecheck_program (prog: prog) =
       | Return(e) ->
         let e' = type_expr !env e in
         begin match fdef.return, e'.t with
-        | Void, _ -> failwith "cannot return a value from a void function"
+        | (Mut Void | Const Void), _ -> failwith "cannot return a value from a void function"
         | t1, t2 ->
           try
             let e'' = get_cast e' fdef.return in
@@ -393,7 +414,7 @@ let typecheck_program (prog: prog) =
     else begin
       let param_env =
         List.fold_left (fun env (x, ty) -> 
-          if ty = Void then
+          if get_type ty = Void then
             raise (Void_variable x)
           else
             Env.add x ty env
@@ -401,7 +422,7 @@ let typecheck_program (prog: prog) =
       in
       let env' = { functions = Env.add fdef.name fdef env.functions; variables = param_env } in
       let body' = typecheck_block env' fdef.body in
-      if fdef.return <> Void && not !returns then
+      if get_type fdef.return <> Void && not !returns then
         failwith "a non void function should return a value"
       else
         env', { fdef with body = body' }

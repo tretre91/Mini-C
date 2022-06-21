@@ -4,10 +4,15 @@
   open Minic_ast
 
   let make_expr e =
-    { t = Void; const = false; expr = e }
+    { t = Mut Void; const = false; expr = e }
   
   (* Valeur par défaut d'une variable d'un type donné *)
-  let default_value = function
+  let default_value typ =
+    let t = match typ with
+      | Mut t -> t
+      | Const t -> t
+    in
+    match t with
     | Integer t -> Cst (CInteger (t, Int64.zero))
     | Float -> Cst (CFloat 0.0)
     | Double -> Cst (CDouble 0.0)
@@ -29,7 +34,7 @@
 %token <Minic_ast.constant> CST
 %token <string> IDENT
 %token <string> SCOPED_ATTR
-%token EXTERN
+%token EXTERN CONST
 %token LPAR RPAR BEGIN END LBRACKET RBRACKET
 %token RETURN SET SEMI COMMA
 %token IF ELSE WHILE FOR
@@ -82,13 +87,18 @@ global_declaration:
 
 (* Déclaration de variables. *)
 variable_decl:
-| t=typ vars=separated_list(COMMA, id=IDENT e=option(SET e=expression { e }) { id, e })
-              { List.map (fun (id, e) -> id, t, Option.value e ~default:(make_expr (default_value t))) vars }
-| t=typ id=IDENT LBRACKET n=expression RBRACKET l=option(SET BEGIN l=separated_list(COMMA, expression) END { l })
-              {
-                let l = Option.value ~default:[] l in
-                [id, Tab (t, n), { t; const = false; expr = InitList l }]
-              }
+| t=ctyp vars=separated_list(COMMA, id=IDENT e=option(SET e=expression { e }) { id, e })
+          { List.map (fun (id, e) -> id, t, Option.value e ~default:(make_expr (default_value t))) vars }
+| t=ctyp id=IDENT LBRACKET n=expression RBRACKET l=option(SET BEGIN l=separated_list(COMMA, expression) END { l })
+          {
+            let l = Option.value ~default:[] l in
+            [id, Const (Tab (t, n)), { t; const = false; expr = InitList l }]
+          }
+| t=ctyp id=IDENT LBRACKET RBRACKET SET BEGIN l=separated_list(COMMA, expression) END
+          { 
+            let len = make_expr (Cst (CInteger (Int, Int64.of_int (List.length l)))) in
+            [id, Const (Tab (t, len)), {t; const = false; expr = InitList l }]
+          }
 ;
 
 (* Indication de type. *)
@@ -105,15 +115,21 @@ typ:
 | DOUBLE        { Double }
 | BOOL          { Bool }
 | VOID          { Void }
-| t=typ MUL     { Ptr t }
-| t=typ LBRACKET RBRACKET { Tab (t, make_expr (Cst (CInteger (Int, Int64.minus_one)))) }
 ;
 
+ctyp:
+| t=typ { Mut t }
+| CONST t=typ { Const t }
+| t=typ CONST { Const t }
+| t=ctyp MUL { Mut (Ptr t) }
+| t=ctyp MUL CONST { Const (Ptr t) }
+;
+
+(* Déclaration d'attributs *)
 attribute:
 | attr=IDENT       { attr }
 | attr=SCOPED_ATTR { attr }
 
-(* Déclaration d'attributs *)
 attributes:
 | LBRACKET LBRACKET l=separated_list(COMMA, attribute) RBRACKET RBRACKET { l }
 | EXTERN { ["extern"] }
@@ -126,15 +142,15 @@ function_d:
 ;
 
 function_decl:
-| t=typ f=IDENT LPAR p=separated_list(COMMA, parameter) RPAR b=block
+| t=ctyp f=IDENT LPAR p=separated_list(COMMA, parameter) RPAR b=block
     { { name=f; params=p; return=t; body=b; is_forward_decl=false; attributes=[] } }
-| t=typ f=IDENT LPAR p=separated_list(COMMA, parameter) RPAR SEMI
+| t=ctyp f=IDENT LPAR p=separated_list(COMMA, parameter) RPAR SEMI
     { { name=f; params=p; return=t; body=[]; is_forward_decl=true; attributes=[] } }
 ;
 
 (* Paramètre formel d'une fonction *)
 parameter:
-| t=typ id=IDENT { id, t }
+| t=ctyp id=IDENT { id, t }
 ;
 
 (* Bloc d'instructions *)

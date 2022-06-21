@@ -23,6 +23,7 @@
         "while",    WHILE;
         "for",      FOR;
         "extern",   EXTERN;
+        "const",    CONST;
       ] ;
     fun s ->
       try  Hashtbl.find h s

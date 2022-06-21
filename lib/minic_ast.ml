@@ -26,7 +26,7 @@ type unop =
   | Not
   | BNot
 
-type typ =
+type typ_s =
   | Integer of integral_type
   | Float
   | Double
@@ -34,6 +34,9 @@ type typ =
   | Void
   | Ptr of typ
   | Tab of typ * expr
+and typ =
+  | Mut of typ_s
+  | Const of typ_s
 (** Représentation des expressions. *)
 and expr_s =
   | Cst of constant
