@@ -33,11 +33,13 @@ let gcc_compile_exec filename =
 (** Compile un fichier minic, le traduit en wasm puis l'execute et renvoie sa
     sortie vers un fichier *)
 let minic_compile_exec filename =
+  Hashtbl.clear Preprocessor.defines;
   let wat_file = Filename.temp_file "minic_tests_file" ".wat" in
   let args = {
     input_file = filename;
     output_file = Some wat_file;
-    include_paths = List.tl (Array.to_list Sys.argv); 
+    include_paths = []; 
+    dump_preproc = None;
   }
   in
   args
@@ -64,10 +66,14 @@ let diff_test file1 file2 =
 
 (** Compile un fichier avec gcc et minic et compare le résultat de l'execution *)
 let test filename =
-  let gcc_output = gcc_compile_exec filename in
-  let mnc_output = minic_compile_exec filename in
-  diff_test gcc_output mnc_output;
-  Printf.printf "test passed for file %s\n" filename
+  try
+    let gcc_output = gcc_compile_exec filename in
+    let mnc_output = minic_compile_exec filename in
+    diff_test gcc_output mnc_output;
+    Printf.printf "test passed for file %s\n" filename
+  with
+    _ as e ->
+      Printf.printf "test failed for file %s\nexecption is: %s\n" filename (Printexc.to_string e)
 
 let main () =
   Sys.readdir "."

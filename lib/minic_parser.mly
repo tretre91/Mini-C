@@ -6,18 +6,6 @@
   let make_expr e =
     { t = Void; const = false; expr = e }
   
-  (** Indique si un attribut est valide *)
-  let is_valid_attribute =
-    let module StrSet = Set.Make(String) in
-    let valid_attributes = [
-      "std";
-      "internal";
-    ]
-    in
-    let s = List.fold_left (fun ids attr -> StrSet.add attr ids) StrSet.empty valid_attributes in
-    fun attribute ->
-      StrSet.mem attribute s
-  
   (* Valeur par défaut d'une variable d'un type donné *)
   let default_value = function
     | Integer t -> Cst (CInteger (t, Int64.zero))
@@ -40,6 +28,7 @@
 (* Déclaration des lexèmes *)
 %token <Minic_ast.constant> CST
 %token <string> IDENT
+%token <string> SCOPED_ATTR
 %token EXTERN
 %token LPAR RPAR BEGIN END LBRACKET RBRACKET
 %token RETURN SET SEMI COMMA
@@ -120,17 +109,20 @@ typ:
 | t=typ LBRACKET RBRACKET { Tab (t, make_expr (Cst (CInteger (Int, Int64.minus_one)))) }
 ;
 
-(* Déclaration d'attributs, ne renvoie que les attributs valides *)
 attribute:
-| LBRACKET LBRACKET l=separated_list(COMMA, IDENT) RBRACKET RBRACKET
-  { List.filter is_valid_attribute l } (* TODO : warning sur les attributs invalides *)
+| attr=IDENT       { attr }
+| attr=SCOPED_ATTR { attr }
+
+(* Déclaration d'attributs *)
+attributes:
+| LBRACKET LBRACKET l=separated_list(COMMA, attribute) RBRACKET RBRACKET { l }
 | EXTERN { ["extern"] }
 ;
 
 (* Déclaration de fonction. *)
 function_d:
 | func=function_decl { func }
-| attr=attribute f=function_d { { f with attributes = attr @ f.attributes } }
+| attr=attributes f=function_d { { f with attributes = attr @ f.attributes } }
 ;
 
 function_decl:

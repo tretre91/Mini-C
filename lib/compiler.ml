@@ -1,7 +1,11 @@
 open Compile_args
 
 let preprocess args =
-  let filename, oc = Filename.open_temp_file "minic_preproc" ".pp" in
+  let filename, oc =
+    match args.dump_preproc with
+    | None -> Filename.open_temp_file "minic_preproc" ".pp"
+    | Some file -> file, open_out file
+  in
   let ic = open_in args.input_file in
   let lexbuf = Lexing.from_channel ic in
   Preprocessor.preprocess args oc lexbuf;

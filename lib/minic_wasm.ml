@@ -235,11 +235,18 @@ let tr_prog prog =
     let body = tr_seq fdef.code in
     func fdef.name fdef.params fdef.locals fdef.return body
   in
-  let tr_extern_func (fdef: Llir.fun_def) =
-    ImportedFunction (fdef.name, fdef.params, fdef.return)
+  let tr_extern_func namespace (fdef: Llir.fun_def) =
+    ImportedFunction (namespace, fdef.name, fdef.params, fdef.return)
   in
   (* traduction des variables globales *)
   let globals = List.map (fun (v, t) -> Global (v, Mut, t, default_instr t)) Llir.(prog.globals) in
+  (* traductions des fonctions externes *)
+  let extern_functions = List.filter_map (fun (n, f) -> 
+      match n with
+      | None -> None
+      | Some namespace -> Some (tr_extern_func namespace f)
+    ) Llir.(prog.extern_functions)
+  in
   (* traduction des données statiques *)
   let data = List.map (fun (addr, data) -> Data (addr, data)) Llir.(prog.static) in
   (* calcul du nombre de pages mémoires initial du programme *)
@@ -251,7 +258,7 @@ let tr_prog prog =
   let sp_initial_value = make_i32_const (page_size * data_size) in
   Module (
        Start "__init"
-    ::(List.map tr_extern_func Llir.(prog.extern_functions))
+    :: extern_functions
     @ [Memory (memory_size);
        Global ("__sp", Mut, I32, [sp_initial_value]);
        Global ("__heap_size", Mut, I32, [make_i32_const initial_heap_size]);
@@ -339,8 +346,8 @@ let print_prog channel p =
       print_seq 2 seq;
       printfi ")\n"
     (* Affichage d'une fonction importée *)
-    | ImportedFunction (name, params, result) ->
-      printfi "(import \"std\" \"%s\" (func $%s%a %a))\n" name name print_params params print_result result
+    | ImportedFunction (namespace, name, params, result) ->
+      printfi "(import \"%s\" \"%s\" (func $%s%a %a))\n" namespace name name print_params params print_result result
     (* Affichage d'une déclaration de fonction *)
     | Function (name, params, result, locals, seq) ->
       printfi "(func $%s (export \"%s\")%a %a\n" name name print_params params print_result result;
@@ -352,7 +359,7 @@ let print_prog channel p =
     (* Affichage d'une clause start *)
     | Start f -> printfi "(start $%s)\n" f
     (* Affichage d'une clause memory *)
-    | Memory i -> printfi "(memory %d)\n" i
+    | Memory size -> printfi "(memory (export \"mem\") %d)\n" size
     (* Affichage d'une clause data *)
     | Data (addr, data) ->
       begin match addr with

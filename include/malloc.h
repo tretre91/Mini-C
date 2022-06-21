@@ -1,3 +1,6 @@
+#ifndef __MALLOC_H
+#define __MALLOC_H
+
 #define NULL 0
 
 #define size_t long
@@ -5,8 +8,10 @@
 #define BLOCK BYTE*
 #define HEADER size_t
 
-[[internal]] extern void* __sbrk();
-[[internal]] extern void* __heap_end();
+extern void* __sbrk();
+extern void* __heap_end();
+[[import::debug]] extern void __dump();
+[[import::debug]] extern void __log(long i);
 
 BLOCK __first_block = NULL;
 
@@ -124,3 +129,5 @@ void free(void* ptr) {
         __add_free_block(b);
     }
 }
+
+#endif // __MALLOC_H

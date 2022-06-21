@@ -3,11 +3,12 @@ open Libminic.Compile_args
 open Cmdliner
 
 (** Fonction principale *)
-let main input_file output_file include_paths =
+let main input_file output_file include_paths dump_pp =
   let args = {
     input_file;
     output_file;
     include_paths;
+    dump_preproc = dump_pp;
   }
   in
   let preprocessed_file = preprocess args in
@@ -27,7 +28,11 @@ let command_line =
     let doc = "The directories to search for include files" in
     Arg.(value & opt_all string [] & info ["I"] ~docv:"PATH" ~doc)
   in
-  let args_t = Term.(const main $ input_file $ output_file $ include_paths) in
+  let dump_pp =
+    let doc = "Output the preprocessed sources to $(docv)" in
+    Arg.(value & opt ~vopt:(Some "a.out.pp") (some string) None & info ["dump"] ~docv:"FILE" ~doc)
+  in
+  let args_t = Term.(const main $ input_file $ output_file $ include_paths $ dump_pp) in
   let doc = "Compiler targeting WebAssembly !" in
   let info = Cmd.info "minic" ~version:"0.0.1" ~doc in
   Cmd.v info args_t

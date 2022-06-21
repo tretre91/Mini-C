@@ -100,6 +100,8 @@ rule token = parse
       { CST (CDouble (float_of_string d)) }
   | ident as id
       { keyword_or_ident id }
+  | (ident "::" ident) as attr
+      { SCOPED_ATTR (attr) }
   | ";"
       { SEMI }
   | ","

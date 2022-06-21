@@ -53,7 +53,7 @@ type prog = {
   static_pages: int;
   globals: (string * Wasm.dtype) list;
   functions: fun_def list;
-  extern_functions: fun_def list;
+  extern_functions: (string option * fun_def) list;
 }
 
 let num_op_of_binop (op: Minic_ast.binop) : num_op =

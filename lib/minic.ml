@@ -62,7 +62,7 @@ type prog = {
   static_pages: int;
   globals: (string * typ) list;
   functions: fun_def list;
-  extern_functions: fun_def list;
+  extern_functions: (string option * fun_def) list;
 }
 
 let todo ?msg location =
@@ -80,7 +80,18 @@ let escape_string s =
   String.iter (fun c -> Printf.bprintf b "\\%02x" (Char.code c)) s;
   Buffer.contents b
 
-(* Donne la taille d'un objet en octets *)
+(** Récupère la valeur de l'attribut correspondant à l'espace de nom d'une fonction 
+    déclarée 'extern' *)
+let rec get_namespace attributes =
+  match attributes with
+  | [] -> None
+  | attr::tl ->
+    try
+      Scanf.sscanf attr "import::%s" (fun name -> Some name)
+    with
+      Scanf.Scan_failure _ -> get_namespace tl
+
+(** Donne la taille d'un objet en octets *)
 let sizeof = function
   | Integer Char -> 1
   | Integer Short -> 2
@@ -385,13 +396,13 @@ let prog_of_ast ast =
           (offset, escape_string (Buffer.contents buffer)) :: static, (v, Ptr t) :: globals, funcs, extern_funcs, Set (v, make_size offset)::init_instr
         | _, _ -> static, (v, t') :: globals, funcs, extern_funcs, Set (v, e') :: init_instr
         end
-      | Ast.Function f when f.is_forward_decl && List.mem "std" f.attributes ->
+      | Ast.Function f when f.is_forward_decl && List.mem "extern" f.attributes ->
         let f' = { (tr_fun f) with locals = []; body = [] } in
-        static, globals, funcs, f' :: extern_funcs, init_instr
+        let namespace = get_namespace f.attributes in
+        static, globals, funcs, (namespace, f') :: extern_funcs, init_instr
       | Ast.Function f when not f.is_forward_decl ->
         static, globals, tr_fun f :: funcs, extern_funcs, init_instr
-      | Ast.Function _ ->
-        static, globals, funcs, extern_funcs, init_instr
+      | Ast.Function _ -> failwith __LOC__ (* unreachable *)
     ) ([], [], [], [], []) ast
   in
 

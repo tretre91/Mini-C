@@ -154,7 +154,7 @@ let tr_prog prog =
   (* initialisation de la table de hachage [functions] *)
   let add_function (fdef: Minic.fun_def) = Hashtbl.add functions fdef.name fdef.return in
   List.iter add_function Minic.(prog.functions);
-  List.iter add_function Minic.(prog.extern_functions);
+  List.iter (fun (_, f) -> add_function f) Minic.(prog.extern_functions);
   
   let static =
       List.map (fun data -> None, data) Minic.(prog.persistent)
@@ -166,5 +166,5 @@ let tr_prog prog =
     Llir.static_pages = Minic.(prog.static_pages);
     Llir.globals = List.map (fun (v, t) -> v, Option.get (dtype_of_typ t)) Minic.(prog.globals);
     Llir.functions = List.map tr_fdef Minic.(prog.functions);
-    Llir.extern_functions = List.map (fun f -> { (tr_fdef f) with code = [] }) Minic.(prog.extern_functions);
+    Llir.extern_functions = List.map (fun (namespace, f) -> namespace, { (tr_fdef f) with code = [] }) Minic.(prog.extern_functions);
   }

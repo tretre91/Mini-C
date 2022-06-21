@@ -29,6 +29,13 @@
   let dir_exists dir =
     Sys.file_exists dir && Sys.is_directory dir
 
+  (** Ouvre une pipe et renvoie les deux côtés sous forme de channel *)
+  let open_pipe () =
+    let ifd, ofd = Unix.pipe () in
+    let ic = Unix.in_channel_of_descr ifd in
+    let oc = Unix.out_channel_of_descr ofd in
+    ic, oc
+
   (** Recherche un fichier parmi une liste de répértoires *)
   let rec search_include directories file =
     match directories with
@@ -57,6 +64,12 @@
   (** Table de hachage contenant les macros définies *)
   let defines = Hashtbl.create 16
 
+  (** convertit la condition d'une directive #ifdef en bool *)
+  let get_condition str =
+    match int_of_string_opt str with
+    | Some v -> v <> 0
+    | None -> Hashtbl.mem defines str
+
 }
 
 let space = [' ''\t''\r']
@@ -64,7 +77,9 @@ let alpha = ['a'-'z''A'-'Z']
 let alnum = ['a'-'z''A'-'Z''0'-'9''_']
 let word = alnum+
 let id = (alpha | '_')alnum*
+let integer = ['0'-'9']+
 let string = [^'#''\n']*
+let condition = id | integer
 
 let comment = "//"[^'\n']*
 
@@ -85,9 +100,7 @@ rule preprocess args oc = parse
     preprocess args oc lexbuf
   }
   | "#define" space+ (id as id) (space+ (string as replacement) | (space*)) '\n' {
-      let ifd, ofd = Unix.pipe () in
-      let pipe_ic = Unix.in_channel_of_descr ifd in
-      let pipe_oc = Unix.out_channel_of_descr ofd in
+      let pipe_ic, pipe_oc = open_pipe () in
       let buf = Lexing.from_string (Option.value replacement ~default:"") in
       preprocess args pipe_oc buf;
       close_out pipe_oc;
@@ -128,11 +141,42 @@ rule preprocess args oc = parse
       close_in ic;
       preprocess args oc lexbuf
     }
+  | "#ifdef" space+ (condition as cond) space* '\n' {
+      let cond = get_condition cond in
+      if cond then begin
+        let pipe_ic, pipe_oc = open_pipe () in
+        ifdef cond 0 pipe_oc lexbuf;
+        close_out pipe_oc;
+        let code = get_channel_contents pipe_ic in
+        close_in pipe_ic;
+        preprocess args oc (Lexing.from_string code)
+        end
+      else
+        let oc = open_out Filename.null in
+        ifdef cond 0 oc lexbuf;
+      preprocess args oc lexbuf
+    }
+  | "#ifndef" space+ (condition as cond) space* '\n' {
+      let cond = not (get_condition cond) in
+      if cond then begin
+        let pipe_ic, pipe_oc = open_pipe () in
+        ifdef cond 0 pipe_oc lexbuf;
+        close_out pipe_oc;
+        let code = get_channel_contents pipe_ic in
+        close_in pipe_ic;
+        preprocess args oc (Lexing.from_string code)
+        end
+      else
+        let oc = open_out Filename.null in
+        ifdef cond 0 oc lexbuf;
+      preprocess args oc lexbuf
+    }
   | eof { () }
   | _ as c {
       output_char oc c;
       preprocess args oc lexbuf
     }
+(* règle d'analyse des commentaires en blocs (/* ... */) *)
 and multiline_comment start_pos = parse
   | ['\n']
       { Lexing.new_line lexbuf; multiline_comment start_pos lexbuf }
@@ -142,3 +186,36 @@ and multiline_comment start_pos = parse
       { multiline_comment start_pos lexbuf }
   | eof
       { error "Forgot to close this multiline comment" start_pos }
+(* règle d'analyse des blocs de compilation conditionnelle *)
+and ifdef cond depth oc = parse
+  | "#ifdef" space+ (condition as cond') space* '\n' {
+      let cond' = cond && get_condition cond' in
+      if cond then
+        ifdef cond' (depth + 1) oc lexbuf
+      else
+        let oc = open_out Filename.null in
+        ifdef cond' (depth + 1) oc lexbuf;
+      ifdef cond depth oc lexbuf
+    }
+  | "#ifndef" space+ (condition as cond') space* '\n' {
+      let cond' = cond && (not (get_condition cond')) in
+      if cond then
+        ifdef cond' (depth + 1) oc lexbuf
+      else
+        let oc = open_out Filename.null in
+        ifdef cond' (depth + 1) oc lexbuf;
+      ifdef cond depth oc lexbuf
+    }
+  | "#endif" _* '\n' {
+      ()
+    }
+  | eof {
+      if depth = 0 then
+        ()
+      else
+        error "Missing an endif preprocessor directive" (Lexing.lexeme_start_p lexbuf)
+    }
+  | _ as c {
+      output_char oc c;
+      ifdef cond depth oc lexbuf
+    }
