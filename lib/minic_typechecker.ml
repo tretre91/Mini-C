@@ -316,12 +316,24 @@ let typecheck_program (prog: prog) =
       let te = e'.t in
       match tv, te with
       | (Const Void | Mut Void), _ -> raise (Void_variable x)
-      | Const (Tab (t, n)), _ ->
-        let n' = get_integer (type_expr env n) in
-        let t' = Const (Tab (t, n')) in
-        let env' = { env with variables = Env.add x t' env.variables } in
-        let local_env' = Env.add x () local_vars in
-        (env', local_env'), (x, t', e')
+      | Const (Tab (t, n)),  _ ->
+        begin match get_type t, e'.expr with
+          | Integer Char, Cst (CString addr) ->
+            (* cas char tab[] = "blabla" *)
+            let s = Minic.get_static_string addr in
+            let length = Cst (CInteger (Int, Int64.of_int (String.length s))) in
+            let t' = Const (Tab (t, { t = Const (Integer Int); const = true; expr = length })) in
+            let env' = { env with variables = Env.add x t' env.variables } in
+            let local_env' = Env.add x () local_vars in
+            (env', local_env'), (x, t', e')
+          | _, InitList _ ->
+            let n' = get_integer (type_expr env n) in
+            let t' = Const (Tab (t, n')) in
+            let env' = { env with variables = Env.add x t' env.variables } in
+            let local_env' = Env.add x () local_vars in
+            (env', local_env'), (x, t', e')
+          | _, _ -> raise (Bad_assignement (tv, x, te))
+        end
       | _, _ ->
         try
           let e' = get_cast e' tv in

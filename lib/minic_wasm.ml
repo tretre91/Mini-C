@@ -42,6 +42,7 @@ let store dtype =
   Instr [instr]
 
 let mem_init id = Instr ["memory.init"; string_of_int id]
+let mem_copy = Instr ["memory.copy"]
 let mem_size = Instr ["memory.size"]
 let mem_grow = Instr ["memory.grow"]
 
@@ -223,6 +224,7 @@ let tr_prog prog =
       | Set v -> set_var v
       | Load dtype -> load dtype
       | Store dtype -> store dtype
+      | MemCpy -> mem_copy
       | MemInit id -> mem_init id
       | If (s1, s2) -> if_then_else (tr_seq s1) (tr_seq s2)
       | While (cond, seq) -> while_loop (tr_seq cond) (tr_seq seq)

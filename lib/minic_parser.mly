@@ -99,6 +99,11 @@ variable_decl:
             let len = make_expr (Cst (CInteger (Int, Int64.of_int (List.length l)))) in
             [id, Const (Tab (t, len)), {t; const = false; expr = InitList l }]
           }
+| t=ctyp id=IDENT LBRACKET RBRACKET SET e=expression
+          { 
+            let len = make_expr (Cst (CInteger (Int, -1L))) in
+            [id, Const (Tab (t, len)), e]
+          }
 ;
 
 (* Indication de type. *)

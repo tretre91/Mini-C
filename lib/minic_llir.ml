@@ -107,6 +107,9 @@ let tr_fdef func =
     match i with
     | Minic.Set (v, e) -> tr_expr e (Llir.Set (convert_var v) :: next)
     | Minic.Write (t, p, e) -> tr_expr p (tr_expr e (Llir.Store (Option.get (extended_dtype_of_typ t)) :: next))
+    | Minic.Memcpy (dest, source, len) ->
+      let length = Llir.Cst (Llir.I32Cst (Int32.of_int len)) in
+      tr_expr dest (tr_expr source (length :: Llir.MemCpy :: next))
     | Minic.StaticMemcpy (dest, id, len) ->
       let offset = Llir.Cst (Llir.I32Cst 0l) in
       let length = Llir.Cst (Llir.I32Cst (Int32.of_int len)) in

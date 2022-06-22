@@ -38,6 +38,7 @@ and const_expr = {
     de variable dans cette représentation *)
 type instr =
   | Set of string * expr
+  | Memcpy of expr * expr * int (* dest, src, taille *)
   | StaticMemcpy of expr * int * int (* dest, id du segment, taille du segment *)
   | Write of typ * expr * expr
   | If of expr * block * block
@@ -125,6 +126,14 @@ let rec make_initlist t n l =
   | _ when n = 0 -> []
   | [] -> default_value t :: make_initlist t (n - 1) l
   | e::tl -> e :: make_initlist t (n - 1) tl
+
+let get_static_string address =
+  let exception Break of string in
+  try
+    Hashtbl.iter (fun s addr -> if addr = address then raise (Break s)) Minic_lexer.strings;
+    raise Not_found
+  with
+    Break s -> s
 
 (** Calcule la valeur d'une expression constante *)
 let calc_const_expr e =
@@ -345,7 +354,6 @@ let prog_of_ast ast =
             let size = n * (sizeof t) in
             stack_size := !stack_size + size;
             add_var v (Ptr t);
-            let p = get_var v in
             let instr =
               if const then
                 let buffer = buffer_of_initlist l in
@@ -353,9 +361,14 @@ let prog_of_ast ast =
                 persistent_data := data :: !persistent_data;
                 [StaticMemcpy (Get (get_var v), next_data_id (), Buffer.length buffer)]
               else
-                List.mapi (fun i e -> Write (t, make_ptr t (Get p) (make_size i), e)) l
+                List.mapi (fun i e -> Write (t, make_ptr t (Get (get_var v)) (make_size i), e)) l
             in
             Set (get_var v, Get sp) :: incr_sp size :: instr @ tr_decl tl
+          | Tab (Integer Char as t, n), str ->
+            stack_size := !stack_size + n;
+            add_var v (Ptr t);
+            let memcpy = Memcpy (Get (get_var v), str, n) in
+            Set (get_var v, Get sp) :: incr_sp n :: memcpy :: tr_decl tl
           | t, e' ->
             add_var v t;
             Set (get_var v, e') :: tr_decl tl

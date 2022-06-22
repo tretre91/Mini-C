@@ -33,6 +33,7 @@ type instr =
   | Load of Wasm.dtype
   | Store of Wasm.dtype
   | MemInit of int
+  | MemCpy
   | If of seq * seq
   | While of seq * seq (* Liste des instructions de la condition d'arrêt + corps de la boucle *)
   | Call of string
