@@ -1,6 +1,10 @@
 #ifndef __STDIO_H
 #define __STDIO_H
 
+#include <stddef.h>
+
+#define EOF -1
+
 [[import::std]] extern int putchar(int c);
 
 int puts(const char* str) {

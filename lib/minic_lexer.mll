@@ -59,9 +59,27 @@
       else
         Minic_ast.CInteger (Int, value)
 
+  let strings = Hashtbl.create 16
+  let strings_offset = ref 8 (* On commence à écrire nos données à l'adresse 8 (au lieu de 0 qui est réservée *)
+
+  (** fonction utilisée dans pour réinitialiser les données entre 2 tests *)
+  let reset_strings () =
+    Hashtbl.clear strings;
+    strings_offset := 8
+
+  let add_string s =
+    match Hashtbl.find_opt strings s with
+    | Some addr -> addr
+    | None -> begin
+        let curr_offset = !strings_offset in
+        strings_offset := curr_offset + String.length s;
+        Hashtbl.add strings s curr_offset;
+        curr_offset
+      end
+
   (* Quitte le programme et affiche un message d'erreur indiquant l'emplacement de l'erreur *)
   let error message pos =
-    Printf.fprintf stderr "error at (%d, %d): %s" pos.pos_lnum (pos.pos_cnum - pos.pos_bol) message;
+    Printf.fprintf stderr "error at (%d, %d): %s\n" pos.pos_lnum (pos.pos_cnum - pos.pos_bol) message;
     exit 1
 }
 
@@ -70,11 +88,9 @@ let digit = ['0'-'9']
 let octal = ['0'-'7']
 let hex = ['a'-'f''A'-'F''0'-'9']
 
-let valid_escapes = "\\" ['n'] (* TODO *)
 let hex_char = "\\x" (hex | hex hex)
 let oct_char = "\\" (octal | octal octal | octal octal octal)
-let chr = (_ | hex_char | oct_char | valid_escapes)
-let char = "'" chr "'"
+let chr = (_ | hex_char | oct_char | "\\"['a'-'z'])
 
 let number = digit+
 let integer = '-'? (number | "0x" hex+ | "0b" ['0''1']+)
@@ -93,6 +109,11 @@ rule token = parse
       { token lexbuf }
   | "'" (chr as c) "'"
       { CST (CInteger (Char, Int64.of_int (int_of_char (char_of_string c)))) }
+  | "\"" {
+        let str = str (Buffer.create 16) (lexeme_start_p lexbuf) lexbuf in
+        let address = add_string str in
+        CST (CString address)
+    }
   | integer as n
       { let cst = get_int_constant n in CST cst }
   | (float as f) 'f'
@@ -165,3 +186,10 @@ rule token = parse
       { error ("Unknown character : " ^ (lexeme lexbuf)) (lexeme_start_p lexbuf) }
   | eof
       { EOF }
+and str buf start_pos = parse
+  | "\""
+      { Buffer.add_char buf '\000'; Buffer.contents buf }
+  | chr as c
+      { Buffer.add_char buf (char_of_string c); str buf start_pos lexbuf }
+  | eof
+      { error "unclosed string litteral" start_pos }

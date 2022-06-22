@@ -46,7 +46,7 @@ let tr_fdef func =
   in
   let constant_of_const_expr c =
     match Minic.(c.t, c.value) with
-    | (Integer (Char | Short | Int) | Bool), Integral i -> Llir.I32Cst (Int64.to_int32 i)
+    | (Integer (Char | Short | Int) | Bool | Ptr _), Integral i -> Llir.I32Cst (Int64.to_int32 i)
     | Integer Long, Integral i -> Llir.I64Cst i
     | Float, Floating f -> Llir.F32Cst f
     | Double, Floating d -> Llir.F64Cst d

@@ -80,6 +80,18 @@ let escape_string s =
   String.iter (fun c -> Printf.bprintf b "\\%02x" (Char.code c)) s;
   Buffer.contents b
 
+(** [escape_non_printable s] renvoie la chaîne de caractères s avec tous ses
+    caractères non imprimables correctement échappés *)
+let escape_non_printable s =
+  let b = Buffer.create (3 * String.length s) in
+  String.iter (fun c ->
+    match c with
+    | '"' -> Buffer.add_string b "\\\""
+    | ' '..'~' -> Buffer.add_char b c
+    | _ -> Printf.bprintf b "\\%02x" (Char.code c)
+  ) s;
+  Buffer.contents b
+
 (** Récupère la valeur de l'attribut correspondant à l'espace de nom d'une fonction 
     déclarée 'extern' *)
 let rec get_namespace attributes =
@@ -208,6 +220,7 @@ let prog_of_ast ast =
     | CFloat f  -> { t = Float; value = Floating f }
     | CDouble d -> { t = Double; value = Floating d }
     | CBool b   -> { t = Bool; value = Integral (if b then 1L else 0L) }
+    | CString p -> { t = Ptr (Integer Char); value = Integral (Int64.of_int p) }
     | CIList l  -> { t = Tab(Void, -1); value = List (List.map const_expr_of_constant l)}
   in
   (* Crée une expression correspondant à un accès mémoire *)
@@ -378,13 +391,19 @@ let prog_of_ast ast =
     }
   in
 
+  let static_strings =
+       Hashtbl.to_seq Minic_lexer.strings
+    |> Seq.map (fun (str, addr) -> addr, escape_non_printable str)
+    |> List.of_seq
+  in
+  let static_offset = ref !Minic_lexer.strings_offset in
+
   (* On itère sur toutes les déclarations globales, on récupère 
      - les variables globales
      - les instructions servant à les initialiser 
      - les définitions de fonctions
      - les fonctions déclarées extern
      - les données qui devront être placées en mémoire statique *)
-  let static_offset = ref 0 in
   let static, globals, funcs, extern_funcs, init_instr =
     List.fold_left (fun (static, globals, funcs, extern_funcs, init_instr) global ->
       match global with
@@ -408,7 +427,7 @@ let prog_of_ast ast =
       | Ast.Function f when not f.is_forward_decl ->
         static, globals, tr_fun f :: funcs, extern_funcs, init_instr
       | Ast.Function _ -> failwith __LOC__ (* unreachable *)
-    ) ([], [], [], [], []) ast
+    ) (static_strings, [], [], [], []) ast
   in
 
   (* on crée une fonction init qui contient les initialisations de variables globales *)
@@ -425,14 +444,16 @@ let prog_of_ast ast =
   let static_pages = (!static_offset / page_size) + (if !static_offset mod page_size <> 0 then 1 else 0) in
   (* on ajoute les instructions nécessaire à l'initialisation de la bibliothèque malloc si stdlib.h est inclus *)
   let init_fun =
-    let heap_start = page_size * (static_pages + stack_size) in
-    let init_first_block =
-      let first_block_size = page_size * initial_heap_size - 16 in
-      let ptr = make_ptr (Integer Long) (Get "__first_block") (make_size (-1)) in
-      let value = Cst { t = Integer Long; value = Integral (Int64.of_int first_block_size) } in
-      Write (Integer Long, ptr, value)
-    in
-    if Hashtbl.mem Preprocessor.defines "__HAS_STDLIB" then
+    if not (Hashtbl.mem Preprocessor.defines "__STDLIB_H") then
+      init_fun
+    else
+      let heap_start = page_size * (static_pages + stack_size) in
+      let init_first_block =
+        let first_block_size = page_size * initial_heap_size - 16 in
+        let ptr = make_ptr (Integer Long) (Get "__first_block") (make_size (-1)) in
+        let value = Cst { t = Integer Long; value = Integral (Int64.of_int first_block_size) } in
+        Write (Integer Long, ptr, value)
+      in
       let body' = List.rev (
           Expr (Call ("free", [Get "__first_block"]))
         ::init_first_block
@@ -441,8 +462,6 @@ let prog_of_ast ast =
       )
       in
       { init_fun with body = body' }
-    else
-      init_fun
   in
   {
     static;

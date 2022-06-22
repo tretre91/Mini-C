@@ -197,6 +197,7 @@ let typecheck_program (prog: prog) =
       | CFloat _ -> Float
       | CDouble _ -> Double
       | CBool _ -> Bool
+      | CString _ -> Ptr (Const (Integer Char))
       | CIList _ -> failwith "never reached, initializer lists are not treated as constants in this step"
     in
     Const t

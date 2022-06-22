@@ -10,6 +10,7 @@ type constant =
   | CFloat of float
   | CDouble of float
   | CBool of bool
+  | CString of int
   | CIList of constant list
 
 (** Types des opérations binaires *)

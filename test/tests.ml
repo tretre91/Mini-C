@@ -34,6 +34,7 @@ let gcc_compile_exec filename =
     sortie vers un fichier *)
 let minic_compile_exec filename =
   Hashtbl.clear Preprocessor.defines;
+  Minic_lexer.reset_strings ();
   let wat_file = Filename.temp_file "minic_tests_file" ".wat" in
   let args = {
     input_file = filename;
