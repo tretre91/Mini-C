@@ -263,7 +263,7 @@ let prog_of_ast ast =
       match e.t, e.value with
       | Integer Char, Integral v -> Buffer.add_int8 buffer (Int64.to_int v)
       | Integer Short, Integral v -> Buffer.add_int16_le buffer (Int64.to_int v)
-      | (Integer Int | Bool), Integral v -> Buffer.add_int32_le buffer (Int64.to_int32 v)
+      | (Integer Int | Bool | Ptr _), Integral v -> Buffer.add_int32_le buffer (Int64.to_int32 v)
       | Integer Long, Integral v -> Buffer.add_int64_le buffer v
       | Float, Floating f -> Buffer.add_int32_le buffer (Int32.bits_of_float f)
       | Double, Floating f -> Buffer.add_int64_le buffer (Int64.bits_of_float f)
@@ -301,6 +301,13 @@ let prog_of_ast ast =
     | Ast.Cast (expr, from, to_) -> Cast (tr_expr expr, tr_typ from, tr_typ to_)
     | Ast.InitList l -> InitList (e.const, (List.map tr_expr l))
     | Ast.UnaryOperator (op, e) -> UnaryOperator (tr_typ e.t, op, tr_expr e)
+    | Ast.BinaryOperator (Add | Sub as op, e1, e2) ->
+      begin match tr_typ e1.t with
+      | Ptr t ->
+        let offset = BinaryOperator (Integer Int, Mult, make_size (sizeof t), tr_expr e2) in
+        BinaryOperator (Ptr t, op, tr_expr e1, offset)
+      | _ as t -> BinaryOperator (t, op, tr_expr e1, tr_expr e2)
+      end
     | Ast.BinaryOperator (op, e1, e2) -> BinaryOperator (tr_typ e1.t, op, tr_expr e1, tr_expr e2)
     | Ast.Get v -> Get (get_var v)
     | Ast.Call (f, args) -> Call (f, List.map tr_expr args)

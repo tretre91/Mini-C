@@ -188,34 +188,65 @@ and multiline_comment start_pos = parse
       { error "Forgot to close this multiline comment" start_pos }
 (* règle d'analyse des blocs de compilation conditionnelle *)
 and ifdef cond depth oc = parse
+  | comment {
+      ifdef cond depth oc lexbuf
+    }
+  | "/*" {
+    multiline_comment (Lexing.lexeme_start_p lexbuf) lexbuf;
+    ifdef cond depth oc lexbuf
+  }
   | "#ifdef" space+ (condition as cond') space* '\n' {
+    Lexing.new_line lexbuf;
+    let s = cond' in
       let cond' = cond && get_condition cond' in
-      if cond then
+      print_endline ("nested ifdef " ^ s);
+      ifdef cond' (depth + 1) oc lexbuf;
+      print_endline ("parsed nested ifdef " ^ s);
+      (* if cond then
         ifdef cond' (depth + 1) oc lexbuf
       else
         let oc = open_out Filename.null in
-        ifdef cond' (depth + 1) oc lexbuf;
+        ifdef cond' (depth + 1) oc lexbuf; *)
+        Printf.printf "Parsing ifdef at depth %d with cond %b\n" depth cond;
+        flush stdout;
       ifdef cond depth oc lexbuf
     }
   | "#ifndef" space+ (condition as cond') space* '\n' {
+      Lexing.new_line lexbuf;
       let cond' = cond && (not (get_condition cond')) in
-      if cond then
+      ifdef cond' (depth + 1) oc lexbuf;
+      (* if cond then
         ifdef cond' (depth + 1) oc lexbuf
       else
         let oc = open_out Filename.null in
-        ifdef cond' (depth + 1) oc lexbuf;
+        ifdef cond' (depth + 1) oc lexbuf; *)
       ifdef cond depth oc lexbuf
     }
+  | "#else" space* '\n' {
+    Lexing.new_line lexbuf;
+    print_endline "else";
+      ifdef (not cond) depth oc lexbuf
+      (* let cond' = not cond in
+      if cond then
+        ifdef cond' depth oc lexbuf
+      else
+        let oc = open_out Filename.null in
+        ifdef cond' depth oc lexbuf *)
+    }
   | "#endif" _* '\n' {
+    Lexing.new_line lexbuf;
+    print_endline "endif";
       ()
     }
   | eof {
-      if depth = 0 then
+      (* if depth = 0 then
         ()
-      else
+      else *)
         error "Missing an endif preprocessor directive" (Lexing.lexeme_start_p lexbuf)
     }
   | _ as c {
-      output_char oc c;
+    if c= '\n' then Lexing.new_line lexbuf;
+      if cond then
+        output_char oc c;
       ifdef cond depth oc lexbuf
     }

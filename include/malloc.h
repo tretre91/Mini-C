@@ -10,8 +10,14 @@
 
 extern void* __sbrk();
 extern void* __heap_end();
+
+// #ifdef __CLI_DEBUG
 [[import::debug]] extern void __dump();
 [[import::debug]] extern void __log(long i);
+// #else
+// void __dump() {}
+// void __log(long i){}
+// #endif
 
 BLOCK __first_block = NULL;
 
@@ -48,7 +54,7 @@ void __set_next_block(BLOCK b, BLOCK next) {
 }
 
 BLOCK __make_block(BYTE* address, size_t size) {
-    size_t real_size = size - 16;
+    size_t real_size = size - 8;
     size_t* header = address;
     *header = real_size;
     return header + 1;
@@ -72,7 +78,7 @@ void __set_free(BLOCK b) {
 BLOCK __extend_heap(size_t size) {
     BYTE* beginning = __heap_end();
     BYTE* end = beginning;
-    while (end - beginning < size + 16) {
+    while (end - beginning < size + 8) {
         end = __sbrk();
     }
     return __make_block(beginning, end - beginning);
@@ -117,9 +123,22 @@ BLOCK __find_block(size_t size) {
     return b;
 }
 
+void divide(BLOCK b, size_t allocated_size) {
+    size_t size = __block_size(b);
+    if (allocated_size < size / 2 - 8) {
+        BLOCK next = __make_block(b + allocated_size, size - allocated_size);
+        __set_free(next);
+        __add_free_block(next);
+        b = __make_block(b - 8, allocated_size + 8);
+    }
+}
+
 void* malloc(size_t size) {
-    // TODO : diviser les blocs trop grands
-    return __find_block(size);
+    BLOCK b = __find_block(size);
+    if (b != NULL) {
+        divide(b, size);
+    }
+    return b;
 }
 
 void free(void* ptr) {

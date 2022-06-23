@@ -94,6 +94,10 @@ let tr_fdef func =
         in
         tr_expr e (Llir.Cst minus_one :: make_op t Llir.BXor :: next)
       end
+    | Minic.BinaryOperator (_, And, e1, e2) ->
+      Llir.IAnd (tr_expr e1 [], tr_expr e2 []) :: next
+    | Minic.BinaryOperator (_, Or, e1, e2) ->
+      Llir.IOr (tr_expr e1 [], tr_expr e2 []) :: next
     | Minic.BinaryOperator (t, op, e1, e2) ->
       tr_expr e1 (tr_expr e2 (make_op t (Llir.num_op_of_binop op) :: next))
     | Minic.Call (f, args) -> tr_args args (Llir.Call f :: next)
@@ -118,7 +122,8 @@ let tr_fdef func =
       begin match e with
       | Minic.Call (fname, _) when Hashtbl.find functions fname = Minic.Void ->
         tr_expr e next
-      | _ -> tr_expr e (Llir.Drop :: next)
+      | _ ->
+        tr_expr e (Llir.Drop :: next)
       end
     | Minic.Return e -> tr_expr e [Llir.Return]
     | Minic.If (e, b1, b2) -> 

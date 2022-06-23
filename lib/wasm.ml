@@ -1,11 +1,11 @@
 type dtype = I8 | I16 | I32 | I64 | F32 | F64
 
-type qualifier = Mut | Const
+type qualifier = Mut | Const | Export of qualifier
 
 type expr =
   | Instr of string list
   | Module of seq
-  | Block of seq
+  | Block of dtype option * seq
   | Loop of seq
   | If of seq * seq
   | Function of string * dtype list * dtype option * dtype list * seq
@@ -23,7 +23,3 @@ let string_of_typ = function
   | F32 -> "f32"
   | F64 -> "f64"
   | _ -> failwith "other datatypes are only used internally"
-
-let string_of_qualifier = function
-  | Mut -> "mut"
-  | Const -> "const"

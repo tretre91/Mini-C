@@ -100,7 +100,6 @@ let div dtype =
   Instr [sprintf "%s.%s" (string_of_typ dtype) instr]
 let rem dtype = Instr [sprintf "%s.rem_s" (string_of_typ dtype)]
 
-
 let eq dtype = Instr [sprintf "%s.eq" (string_of_typ dtype)]
 let eqz dtype = Instr [sprintf "%s.eqz" (string_of_typ dtype)]
 let neq dtype = Instr [sprintf "%s.ne" (string_of_typ dtype)]
@@ -123,22 +122,49 @@ let return = Instr ["return"]
 let br i = Instr ["br"; string_of_int i]
 let br_if i = Instr ["br_if"; string_of_int i]
 
+(* Opérateurs avec évaluation paresseuse *)
+
+let log_and lhs rhs =
+  Block (Some I32, [
+    Block (None, (
+        lhs
+      @ [eqz I32; br_if 0]
+      @ rhs
+      @ [eqz I32; br_if 0]
+      @ [const (Llir.I32Cst 1l); br 1]
+    ));
+    const (Llir.I32Cst 0l)
+  ])
+
+let log_or lhs rhs =
+  let zero = Llir.I32Cst 0l in
+  Block (Some I32, [
+    Block (None, (
+        lhs
+      @ [const zero; neq I32; br_if 0]
+      @ rhs
+      @ [const zero; neq I32; br_if 0]
+      @ [const (Llir.I32Cst 1l); br 1]
+    ));
+    const (Llir.I32Cst 0l)
+  ])
+
 (* Structures de contrôle *)
 let loop body = Loop body
 
-let block body = Block body
+let block ?result body = Block (result, body)
 
 let if_then_else s1 s2 = If (s1, s2)
 
 let while_loop cond s =
-  Block [
+  Block (None, [
     Loop (
         cond
       @ [eqz I32; br_if 1]
       @ s
       @ [br 0]
     )
-  ]
+  ])
 
 let drop = Instr ["drop"]
 
@@ -220,6 +246,8 @@ let tr_prog prog =
       | Cst i -> const i
       | Cast (from, to_) -> cast from to_
       | Op (dt, op) -> (tr_num_op op) dt
+      | IAnd (lhs, rhs) -> log_and (tr_seq lhs) (tr_seq rhs)
+      | IOr (lhs, rhs) -> log_and (tr_seq lhs) (tr_seq rhs)
       | Get v -> get_var v
       | Set v -> set_var v
       | Load dtype -> load dtype
@@ -264,7 +292,7 @@ let tr_prog prog =
     @ [Memory (memory_size);
        Global ("__sp", Mut, I32, [sp_initial_value]);
        Global ("__heap_size", Mut, I32, [make_i32_const initial_heap_size]);
-       Global ("__heap_start", Const, I32, [heap_start]);]
+       Global ("__heap_start", Export Const, I32, [heap_start]);]
     @  data
     @  globals
     @  __sbrk::__heap_end::(List.map tr_fdef Llir.(prog.functions))
@@ -318,8 +346,12 @@ let print_prog channel p =
       print_seq 2 seq;
       printfi ")\n"
     (* Affichage d'un bloc *)
-    | Block seq ->
-      printfi "(block\n";
+    | Block (result, seq) ->
+      let res = match result with
+        | None -> ""
+        | Some t -> sprintf " %s" (string_of_typ t)
+      in
+      printfi "(block (result %s)\n" res;
       print_seq 2 seq;
       printfi ")\n"
     (* Affichage d'une boucle *)
@@ -339,11 +371,13 @@ let print_prog channel p =
       printfi ")\n"
     (* Affichage d'une déclaration de variable globale *)
     | Global (name, q, t, seq) ->
-      let st = string_of_typ t in
-      let typ = match q with
-        | Mut -> sprintf "(mut %s)" st
-        | Const -> st
+      let rec string_of_qualifier q t =
+        match q with
+        | Mut -> sprintf "(mut %s)" (string_of_typ t)
+        | Const -> string_of_typ t
+        | Export q -> sprintf "(export \"%s\") %s" name (string_of_qualifier q t)
       in
+      let typ = string_of_qualifier q t in
       printfi "(global $%s %s\n" name typ;
       print_seq 2 seq;
       printfi ")\n"

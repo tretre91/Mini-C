@@ -28,6 +28,8 @@ type instr =
   | Cst of constant
   | Cast of datatype * datatype
   | Op of Wasm.dtype * num_op
+  | IAnd of seq * seq
+  | IOr of seq * seq
   | Get of var
   | Set of var
   | Load of Wasm.dtype
