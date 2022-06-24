@@ -8,7 +8,7 @@ function init_memory(instance: WebAssembly.Instance): void {
     const heap_start = instance.exports.__heap_start as WebAssembly.Global;
     memory = new mem.Memory(wasm_memory, heap_start.value);
 }
-
+let c = 0;
 function report(): void {
     const blocks = memory.get_blocks();
     const free_blocks = blocks.reduce((acc: number, b: mem.Block) => b.free ? acc + 1 : acc, 0);
@@ -20,7 +20,6 @@ function report(): void {
     const total_memory = blocks.reduce((total, b) => total + b.size + 8, 0);
     console.log(`heap size : ${memory.get_heap_size()}`);
     console.log(`used heap : ${total_memory}`);
-    
 }
 
 const encoder = new TextEncoder();
@@ -33,7 +32,8 @@ const importObj: WebAssembly.Imports = {
     },
     debug: {
         __dump: () => memory.dump(),
-        __log: (i: number) => { Deno.stdout.writeSync(encoder.encode(`${i}\n`)); }
+        __log: (i: number) => { Deno.stdout.writeSync(encoder.encode(`${i}\n`)); },
+        __export: () => memory.export()
     }
 };
 
@@ -51,6 +51,8 @@ if (Deno.args.length == 0) {
         } catch (error) {
             Deno.stdout.writeSync(encoder.encode(`An exception occured: ${error}\n`));
             memory.dump();
+            memory.export();
         }
+        report();
     });
 }

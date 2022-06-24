@@ -45,6 +45,7 @@ let mem_init id = Instr ["memory.init"; string_of_int id]
 let mem_copy = Instr ["memory.copy"]
 let mem_size = Instr ["memory.size"]
 let mem_grow = Instr ["memory.grow"]
+let mem_fill = Instr ["memory.fill"]
 
 (* Instructions numériques *)
 let const = function
@@ -144,9 +145,9 @@ let log_or lhs rhs =
       @ [const zero; neq I32; br_if 0]
       @ rhs
       @ [const zero; neq I32; br_if 0]
-      @ [const (Llir.I32Cst 1l); br 1]
+      @ [const zero; br 1]
     ));
-    const (Llir.I32Cst 0l)
+    const (Llir.I32Cst 1l)
   ])
 
 (* Structures de contrôle *)
@@ -184,14 +185,23 @@ let default_instr = function
 (* Fonctions internes *)
 let __sbrk =
   let body = [
-    call "__heap_end";
-    local_set 0;
     global_get "__heap_size";
     mem_grow;
+    const (Llir.I32Cst 65536l);
+    mul I32;
+    local_set 0;
     global_get "__heap_size";
     const (Llir.I32Cst 2l);
     mul I32;
     global_set "__heap_size";
+    (* remise à zero de la mémoire alouée *)
+    local_get 0;
+    const (Llir.I32Cst 0l);
+    call "__heap_end";
+    local_get 0;
+    sub I32;
+    mem_fill;
+    (* on renvoie l'ancienne adresse de fin du tas *)
     local_get 0;
     return;
   ]
@@ -207,6 +217,23 @@ let __heap_end =
   ]
   in
   func "__heap_end" [] [] (Some I32) body
+
+let __malloc_h_init =
+  let body = [
+    global_get "__heap_start";
+    call "__heap_end";
+    cast Llir.Int32 Llir.Int64;
+    global_get "__heap_start";
+    cast Llir.Int32 Llir.Int64;
+    sub I64;
+    call "__make_block";
+    local_tee 0;
+    call "__set_free";
+    local_get 0;
+    call "__add_free_block";
+  ]
+  in
+  func "__malloc_h_init" [] [I32] None body
 
 (** Traduction d'un programme *)
 let tr_prog prog =
@@ -247,7 +274,7 @@ let tr_prog prog =
       | Cast (from, to_) -> cast from to_
       | Op (dt, op) -> (tr_num_op op) dt
       | IAnd (lhs, rhs) -> log_and (tr_seq lhs) (tr_seq rhs)
-      | IOr (lhs, rhs) -> log_and (tr_seq lhs) (tr_seq rhs)
+      | IOr (lhs, rhs) -> log_or (tr_seq lhs) (tr_seq rhs)
       | Get v -> get_var v
       | Set v -> set_var v
       | Load dtype -> load dtype
@@ -268,6 +295,13 @@ let tr_prog prog =
   let tr_extern_func namespace (fdef: Llir.fun_def) =
     ImportedFunction (namespace, fdef.name, fdef.params, fdef.return)
   in
+  (* Ajoute les fonctions internes à la liste de fonctions du module *)
+  let add_functions funcs =
+    if Hashtbl.mem Preprocessor.defines "__MALLOC_H" then
+      __sbrk :: __heap_end :: __malloc_h_init :: funcs
+    else
+        funcs
+  in
   (* traduction des variables globales *)
   let globals = List.map (fun (v, t) -> Global (v, Mut, t, default_instr t)) Llir.(prog.globals) in
   (* traductions des fonctions externes *)
@@ -286,6 +320,7 @@ let tr_prog prog =
   let make_i32_const i = const (Llir.I32Cst (Int32.of_int i)) in
   let heap_start = make_i32_const (page_size * (data_size + stack_size)) in
   let sp_initial_value = make_i32_const (page_size * data_size) in
+  let functions = add_functions (List.map tr_fdef Llir.(prog.functions)) in
   Module (
        Start "__init"
     :: extern_functions
@@ -295,7 +330,7 @@ let tr_prog prog =
        Global ("__heap_start", Export Const, I32, [heap_start]);]
     @  data
     @  globals
-    @  __sbrk::__heap_end::(List.map tr_fdef Llir.(prog.functions))
+    @  functions
   )
 
 
@@ -322,7 +357,11 @@ let print_prog channel p =
   in
   (* Affichage des paramètres d'une fonction *)
   let print_params channel params =
-    List.iter (fun typ -> fprintf channel " (param %s)" (string_of_typ typ)) params
+    match params with
+    | [] -> ()
+    | _ ->
+      let params_str = List.map string_of_typ params in
+      Printf.fprintf channel " (param %s)" (String.concat " " params_str)
   in
   (* Affichage du type de retour d'une fonction *)
   let print_result channel result =
@@ -349,9 +388,9 @@ let print_prog channel p =
     | Block (result, seq) ->
       let res = match result with
         | None -> ""
-        | Some t -> sprintf " %s" (string_of_typ t)
+        | Some t -> sprintf " (result %s)" (string_of_typ t)
       in
-      printfi "(block (result %s)\n" res;
+      printfi "(block%s\n" res;
       print_seq 2 seq;
       printfi ")\n"
     (* Affichage d'une boucle *)

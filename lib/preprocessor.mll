@@ -192,12 +192,12 @@ and ifdef cond depth oc = parse
       ifdef cond depth oc lexbuf
     }
   | "/*" {
-    multiline_comment (Lexing.lexeme_start_p lexbuf) lexbuf;
-    ifdef cond depth oc lexbuf
-  }
+      multiline_comment (Lexing.lexeme_start_p lexbuf) lexbuf;
+      ifdef cond depth oc lexbuf
+    }
   | "#ifdef" space+ (condition as cond') space* '\n' {
-    Lexing.new_line lexbuf;
-    let s = cond' in
+      Lexing.new_line lexbuf;
+      let s = cond' in
       let cond' = cond && get_condition cond' in
       print_endline ("nested ifdef " ^ s);
       ifdef cond' (depth + 1) oc lexbuf;
@@ -223,8 +223,8 @@ and ifdef cond depth oc = parse
       ifdef cond depth oc lexbuf
     }
   | "#else" space* '\n' {
-    Lexing.new_line lexbuf;
-    print_endline "else";
+      Lexing.new_line lexbuf;
+      print_endline "else";
       ifdef (not cond) depth oc lexbuf
       (* let cond' = not cond in
       if cond then
@@ -234,8 +234,7 @@ and ifdef cond depth oc = parse
         ifdef cond' depth oc lexbuf *)
     }
   | "#endif" _* '\n' {
-    Lexing.new_line lexbuf;
-    print_endline "endif";
+      Lexing.new_line lexbuf;
       ()
     }
   | eof {

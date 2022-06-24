@@ -174,6 +174,8 @@ let unify t1 t2 =
   let t = match t1, t2 with
     | Integer t1', Integer t2' -> Integer (unify_integral_type t1' t2')
     | _, _ when t1 = t2 -> t1
+    | Bool, Integer t
+    | Integer t, Bool -> Integer (unify_integral_type t Int)
     | Bool, _ -> t2
     | _, Bool -> t1
     | Ptr _, (Double | Float)
@@ -433,8 +435,8 @@ let typecheck_program (prog: prog) =
             Env.add x ty env
         ) env.variables fdef.params
       in
-      let env' = { functions = Env.add fdef.name fdef env.functions; variables = param_env } in
-      let body' = typecheck_block env' fdef.body in
+      let env' = { env with functions = Env.add fdef.name fdef env.functions } in
+      let body' = typecheck_block { env' with variables = param_env } fdef.body in
       if get_type fdef.return <> Void && not !returns then
         failwith "a non void function should return a value"
       else

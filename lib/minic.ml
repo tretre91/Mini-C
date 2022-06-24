@@ -464,24 +464,10 @@ let prog_of_ast ast =
   let static_pages = (!static_offset / page_size) + (if !static_offset mod page_size <> 0 then 1 else 0) in
   (* on ajoute les instructions nécessaire à l'initialisation de la bibliothèque malloc si stdlib.h est inclus *)
   let init_fun =
-    if not (Hashtbl.mem Preprocessor.defines "__STDLIB_H") then
-      init_fun
+    if Hashtbl.mem Preprocessor.defines "__STDLIB_H" then
+      { init_fun with body = List.rev (Expr (Call ("__malloc_h_init", [])) :: init_fun.body) }
     else
-      let heap_start = page_size * (static_pages + stack_size) in
-      let init_first_block =
-        let first_block_size = page_size * initial_heap_size - 16 in
-        let ptr = make_ptr (Integer Long) (Get "__first_block") (make_size (-1)) in
-        let value = Cst { t = Integer Long; value = Integral (Int64.of_int first_block_size) } in
-        Write (Integer Long, ptr, value)
-      in
-      let body' = List.rev (
-          Expr (Call ("free", [Get "__first_block"]))
-        ::init_first_block
-        ::Set ("__first_block", make_size (heap_start + 8))
-        ::init_fun.body
-      )
-      in
-      { init_fun with body = body' }
+      init_fun
   in
   {
     static;
