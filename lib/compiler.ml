@@ -8,7 +8,8 @@ let preprocess args =
   in
   let ic = open_in args.input_file in
   let lexbuf = Lexing.from_channel ic in
-  Preprocessor.preprocess args oc lexbuf;
+  Preprocessor.init args;
+  Preprocessor.start_preprocessing oc lexbuf;
   close_in ic;
   close_out oc;
   filename

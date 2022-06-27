@@ -2,15 +2,8 @@
 
   open Compile_args
 
-  (** Ecrit le contenu d'un fichier dans un channel *)
-  let rec write ic oc =
-    try
-      let s = input_line ic in
-      output_string oc s;
-      output_char oc '\n';
-      write ic oc
-    with
-      End_of_file -> close_in ic
+  exception Unclosed_string_literal
+  exception Unclosed_if_directive
   
   (** Renvoie le contenu d'un input_channel sous forme de chaîne de caractères *)
   let get_channel_contents ic =
@@ -55,6 +48,39 @@
     in
     Filename.concat root_dir "include"
 
+  let user_include_paths = ref []
+
+  let init args =
+    user_include_paths := Sys.getcwd () :: args.include_paths
+
+  let if_depth = ref 0
+
+  (** Creates a lexbuf from a Buffer.t, the buffer is unchanged *)
+  let lexbuf_of_buffer buffer =
+    let index = ref 0 in
+    let max_len = Buffer.length buffer in
+    let get_chars b n =
+      let len = min n (max_len - !index) in
+      Buffer.blit buffer !index b 0 len;
+      index := !index + len;
+      len
+    in
+    Lexing.from_function get_chars
+
+  (** Searches a file among the directories specified in the primary search paths,
+      and in the secondary search paths if the first search was unsuccessful *)
+  let find_file file system_path_first =
+    let primary, secondary =
+      if system_path_first
+      then [system_include_folder], !user_include_paths
+      else !user_include_paths, [system_include_folder]
+    in
+    match search_include primary file with
+    | Some path -> path
+    | None -> match search_include secondary file with
+      | Some path -> path
+      | None -> failwith (Printf.sprintf "No file named %s found in the include directories" file)
+
   (** Quitte le programme et affiche un message d'erreur indiquant l'emplacement de l'erreur *)
   let error message pos =
     let open Lexing in
@@ -63,6 +89,9 @@
 
   (** Table de hachage contenant les macros définies *)
   let defines = Hashtbl.create 16
+
+  (** Indique si une macro est définie *)
+  let defined = Hashtbl.mem defines
 
   (** convertit la condition d'une directive #ifdef en bool *)
   let get_condition str =
@@ -81,171 +110,185 @@ let integer = ['0'-'9']+
 let string = [^'#''\n']*
 let condition = id | integer
 
-let comment = "//"[^'\n']*
+let line_comment = "//"[^'\n']*
 
-rule preprocess args oc = parse
+rule preprocess oc = parse
   | word as w {
       let s = match Hashtbl.find_opt defines w with
       | None -> w
       | Some s -> s
       in
       output_string oc s;
-      preprocess args oc lexbuf
+      preprocess oc lexbuf
     }
-  | comment {
-      preprocess args oc lexbuf
-    }
-  | "/*" {
-    multiline_comment (Lexing.lexeme_start_p lexbuf) lexbuf;
-    preprocess args oc lexbuf
-  }
-  | "#define" space+ (id as id) (space+ (string as replacement) | (space*)) '\n' {
+  | space* "#define" space+ (id as id) (space+ (string as replacement) | (space*)) '\n' {
       let pipe_ic, pipe_oc = open_pipe () in
       let buf = Lexing.from_string (Option.value replacement ~default:"") in
-      preprocess args pipe_oc buf;
+      let last_depth = !if_depth in
+      if_depth := 0;
+      preprocess pipe_oc buf;
+      if_depth := last_depth;
       close_out pipe_oc;
       let replacement' = get_channel_contents pipe_ic in
       Hashtbl.replace defines id (replacement');
       close_in pipe_ic;
-      preprocess args oc lexbuf
+      preprocess oc lexbuf
     }
-  | "#undef" space+ (id as id) '\n' {
+  | space* "#undef" space+ (id as id) space* '\n' {
       Hashtbl.remove defines id;
-      preprocess args oc lexbuf
+      preprocess oc lexbuf
     }
-  | "#include" space+ '"' (string as file) '"' '\n' {
-      let filename =
-        match search_include ((Sys.getcwd ()) :: args.include_paths) file with
-        | Some path -> path
-        | None -> match search_include [system_include_folder] file with
-          | Some path -> path
-          | None -> failwith (Printf.sprintf "No file named %s found in the include directories" file)
-      in
+  | space* "#include" space+ (('"' as c) (string as file) '"' | ('<' as c) (string as file) '>') space* '\n' {
+      let filename = find_file file (c = '<') in
       let ic = open_in filename in
       let buf = Lexing.from_channel ic in
-      preprocess args oc buf;
-      close_in ic;
-      preprocess args oc lexbuf
-    }
-  | "#include" space+ '<' (string as file) '>' '\n' {
-      let filename =
-        match search_include [system_include_folder] file with
-        | Some path -> path
-        | None -> match search_include ((Sys.getcwd ()) :: args.include_paths) file with
-          | Some path -> path
-          | None -> failwith (Printf.sprintf "No file named %s found in the include directories" file)
+      let () =
+        try start_preprocessing oc buf
+        with Unclosed_if_directive -> ()
       in
-      let ic = open_in filename in
-      let buf = Lexing.from_channel ic in
-      preprocess args oc buf;
       close_in ic;
-      preprocess args oc lexbuf
+      preprocess oc lexbuf
     }
-  | "#ifdef" space+ (condition as cond) space* '\n' {
-      let cond = get_condition cond in
-      if cond then begin
-        let pipe_ic, pipe_oc = open_pipe () in
-        ifdef cond 0 pipe_oc lexbuf;
-        close_out pipe_oc;
-        let code = get_channel_contents pipe_ic in
-        close_in pipe_ic;
-        preprocess args oc (Lexing.from_string code)
-        end
+  | space* "#ifdef" space+ (id as macro) space* '\n' {
+      if not (defined macro) then
+        ignore_if 1 lexbuf
       else
-        let oc = open_out Filename.null in
-        ifdef cond 0 oc lexbuf;
-      preprocess args oc lexbuf
+        incr if_depth;
+      preprocess oc lexbuf
     }
-  | "#ifndef" space+ (condition as cond) space* '\n' {
-      let cond = not (get_condition cond) in
-      if cond then begin
-        let pipe_ic, pipe_oc = open_pipe () in
-        ifdef cond 0 pipe_oc lexbuf;
-        close_out pipe_oc;
-        let code = get_channel_contents pipe_ic in
-        close_in pipe_ic;
-        preprocess args oc (Lexing.from_string code)
-        end
+  | space* "#ifndef" space+ (id as macro) space* '\n' {
+      if defined macro then
+        ignore_if 1 lexbuf
       else
-        let oc = open_out Filename.null in
-        ifdef cond 0 oc lexbuf;
-      preprocess args oc lexbuf
+        incr if_depth;
+      preprocess oc lexbuf
     }
-  | eof { () }
+  | space* "#endif" space* '\n' {
+      match !if_depth with
+      | 0 -> error "No matching if directive found" (Lexing.lexeme_start_p lexbuf)
+      | _ -> decr if_depth;
+      preprocess oc lexbuf
+    }
+  | eof { 
+      if !if_depth > 0 then
+        raise Unclosed_if_directive
+    }
   | _ as c {
       output_char oc c;
-      preprocess args oc lexbuf
+      preprocess oc lexbuf
     }
-(* règle d'analyse des commentaires en blocs (/* ... */) *)
-and multiline_comment start_pos = parse
-  | ['\n']
-      { Lexing.new_line lexbuf; multiline_comment start_pos lexbuf }
-  | "*/"
-      { () }
-  | _
-      { multiline_comment start_pos lexbuf }
-  | eof
-      { error "Forgot to close this multiline comment" start_pos }
-(* règle d'analyse des blocs de compilation conditionnelle *)
-and ifdef cond depth oc = parse
-  | comment {
-      ifdef cond depth oc lexbuf
-    }
-  | "/*" {
-      multiline_comment (Lexing.lexeme_start_p lexbuf) lexbuf;
-      ifdef cond depth oc lexbuf
-    }
-  | "#ifdef" space+ (condition as cond') space* '\n' {
+(* Rule used to get a full line of input, it will merge continued lines *)
+and splice_lines buf = parse
+  | "\\" space* "\n" {
       Lexing.new_line lexbuf;
-      let s = cond' in
-      let cond' = cond && get_condition cond' in
-      print_endline ("nested ifdef " ^ s);
-      ifdef cond' (depth + 1) oc lexbuf;
-      print_endline ("parsed nested ifdef " ^ s);
-      (* if cond then
-        ifdef cond' (depth + 1) oc lexbuf
-      else
-        let oc = open_out Filename.null in
-        ifdef cond' (depth + 1) oc lexbuf; *)
-        Printf.printf "Parsing ifdef at depth %d with cond %b\n" depth cond;
-        flush stdout;
-      ifdef cond depth oc lexbuf
+      splice_lines buf lexbuf
     }
-  | "#ifndef" space+ (condition as cond') space* '\n' {
-      Lexing.new_line lexbuf;
-      let cond' = cond && (not (get_condition cond')) in
-      ifdef cond' (depth + 1) oc lexbuf;
-      (* if cond then
-        ifdef cond' (depth + 1) oc lexbuf
-      else
-        let oc = open_out Filename.null in
-        ifdef cond' (depth + 1) oc lexbuf; *)
-      ifdef cond depth oc lexbuf
+  | '\"' {
+      Buffer.add_char buf '\"';
+      get_string buf lexbuf;
+      Buffer.add_char buf '\"';
+      splice_lines buf lexbuf
     }
-  | "#else" space* '\n' {
-      Lexing.new_line lexbuf;
-      print_endline "else";
-      ifdef (not cond) depth oc lexbuf
-      (* let cond' = not cond in
-      if cond then
-        ifdef cond' depth oc lexbuf
-      else
-        let oc = open_out Filename.null in
-        ifdef cond' depth oc lexbuf *)
+  | eof {
+      ()
     }
-  | "#endif" _* '\n' {
+  | '\n' {
       Lexing.new_line lexbuf;
+      Buffer.add_char buf '\n';
+      splice_lines buf lexbuf
+    }
+  | _ as c {
+      Buffer.add_char buf c;
+      splice_lines buf lexbuf
+    }
+(* Gets the contents of a string literal (TODO: check valid escape sequences) *)
+and get_string buf = parse
+  | "\\\n" {
+      Lexing.new_line lexbuf;
+      get_string buf lexbuf
+    }
+  | "\\\"" as s {
+      Buffer.add_string buf s;
+      get_string buf lexbuf
+    }
+  | '\"' {
       ()
     }
   | eof {
-      (* if depth = 0 then
-        ()
-      else *)
-        error "Missing an endif preprocessor directive" (Lexing.lexeme_start_p lexbuf)
+      raise Unclosed_string_literal
     }
   | _ as c {
-    if c= '\n' then Lexing.new_line lexbuf;
-      if cond then
-        output_char oc c;
-      ifdef cond depth oc lexbuf
+      Buffer.add_char buf c;
+      get_string buf lexbuf
+    }
+(* Rule used to remove comments in a line of text *)
+and remove_comments buf = parse
+  | '\"' {
+      Buffer.add_char buf '\"';
+      get_string buf lexbuf;
+      Buffer.add_char buf '\"';
+      remove_comments buf lexbuf
+    }
+  | line_comment {
+      let () = Buffer.add_char buf ' ' in
+      remove_comments buf lexbuf
+    }
+  | "/*" {
+      ignore_block_comment (Lexing.lexeme_start_p lexbuf) lexbuf;
+      Buffer.add_char buf ' ';
+      remove_comments buf lexbuf
+    }
+  | '\n' {
+      Lexing.new_line lexbuf;
+      Buffer.add_char buf '\n';
+      remove_comments buf lexbuf
+    }
+  | eof {
+      ()
+    }
+  | _ as c {
+      Buffer.add_char buf c;
+      remove_comments buf lexbuf
+    }
+(* règle d'analyse des commentaires en blocs (/* ... */) *)
+and ignore_block_comment start_pos = parse
+  | '\n' {
+      Lexing.new_line lexbuf;
+      ignore_block_comment start_pos lexbuf
+    }
+  | "*/" { 
+      ()
+    }
+  | _ {
+      ignore_block_comment start_pos lexbuf
+    }
+  | eof {
+      error "Forgot to close this block comment" start_pos
+    }
+(* Rule used to ignore a conditional block *)
+and ignore_if depth = parse
+  | space* ("#ifdef" | "#ifndef") space+ id space* '\n' {
+      ignore_if (depth + 1) lexbuf
+    }
+  | space* "#endif" space* '\n' {
+      if depth > 1 then
+        ignore_if (depth - 1) lexbuf
+    }
+  | eof {
+      error "Unclosed ifdef block" (Lexing.dummy_pos) (* TODO *)
+    }
+  | _ {
+      ignore_if depth lexbuf
+    }
+(* Main rule, applies each step of preprocessing *)
+and start_preprocessing oc = parse
+  | "" {
+      (* merge of continued lines *)
+      let lines_buffer = Buffer.create 2048 in
+      splice_lines lines_buffer lexbuf;
+      (* comments removal *)
+      let clean_buffer = Buffer.create (Buffer.length lines_buffer) in
+      remove_comments clean_buffer (lexbuf_of_buffer lines_buffer);
+      (* preprocessing *)
+      preprocess oc (lexbuf_of_buffer clean_buffer)
     }
