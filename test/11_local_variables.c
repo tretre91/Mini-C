@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 int GLOBAL;
 
 int step(int i) {

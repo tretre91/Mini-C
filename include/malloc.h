@@ -58,7 +58,7 @@ size_t __block_size(BLOCK b) {
     return ptr[-1] & ~0b111;
 }
 
-bool __block_is_free(BLOCK b) {
+_Bool __block_is_free(BLOCK b) {
     HEADER* ptr = b;
     return ptr[-1] & 0x1;
 }

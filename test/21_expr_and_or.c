@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 int main() {
   bool b = true || 1 < 0;
   bool b2 = b && true && (b == b || false);

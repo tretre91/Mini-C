@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 bool GLOBAL = true;
 bool DEFAULT;
 

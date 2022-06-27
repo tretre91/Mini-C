@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 int PARAM = 5;
 
 int f() {

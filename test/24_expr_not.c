@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 bool not(bool b) {
   return !b;
 }

@@ -16,7 +16,7 @@
         "long",     LONG;
         "float",    FLOAT;
         "double",   DOUBLE;
-        "bool",     BOOL;
+        "_Bool",     BOOL;
         "void",     VOID;
         "if",       IF;
         "else",     ELSE;

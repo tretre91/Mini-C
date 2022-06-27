@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 int f() {
   false;
   return 0;

@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 int GLOBAL = 5;
 
 bool not(bool b) {

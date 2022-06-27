@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 int GLOBAL = 2;
 
 bool lt0(int i) {

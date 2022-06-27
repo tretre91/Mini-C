@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdbool.h>
 
 int i1 = 2, i2 = 5;
 int espace;

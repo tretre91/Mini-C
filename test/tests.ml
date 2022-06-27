@@ -15,11 +15,9 @@ let gcc_compile_exec filename =
   let output_file = Filename.temp_file "minic_tests_output_gcc" ".txt" in
   let executable = Filename.concat (Filename.get_temp_dir_name ()) "test" in
 
-  let include_bool_cmd = Filename.quote_command "echo" ["#include <stdbool.h>"] in
   let cat_src_cmd = Filename.quote_command "cat" [filename] in
   let compile_cmd = Filename.quote_command "gcc" [source_file; "-o"; executable] in
   
-  execute_command (sprintf "%s > %s" include_bool_cmd source_file);
   execute_command (sprintf "%s >> %s" cat_src_cmd source_file);
   execute_command compile_cmd;
   begin try
@@ -79,7 +77,7 @@ let test filename =
 let main () =
   Sys.readdir "."
   |> Array.to_seq
-  |> Seq.filter (fun filename -> Filename.extension filename = ".mnc")
+  |> Seq.filter (fun filename -> Filename.extension filename = ".c")
   |> List.of_seq
   |> List.sort compare
   |> List.iter test

@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdbool.h>
 
 char tab[6] = { 'h', 'e', 'l', 'l', 'o', '!' };
 

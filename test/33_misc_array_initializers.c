@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 int a[5] = { 0, 1 };
 int x = 18;
 

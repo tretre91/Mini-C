@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdbool.h>
 
 int mod(int a, int b) {
   while(b < a + 1) {
