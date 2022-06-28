@@ -16,12 +16,12 @@ In order to compile a C program, you can use the command:
 minic prog.c
 ```
 
-By default, the output program is sent on standard output, you can use option `-o` to send it to a file, the full list of options can be seen with the command
+By default, the output program is sent on standard output, you can use the `-o` option to send it to a file, the full list of options can be seen with the command
 ```
 minic --help
 ```
 
-The output format is WebAssembly's [textual format](https://developer.mozilla.org/en-US/docs/WebAssembly/Understanding_the_text_format), the output file can then be compiled to the binary format using the wat2wasm tool from [the WebAssembly binary toolkit](https://github.com/WebAssembly/wabt#wabt-the-webassembly-binary-toolkit).
+The output format is WebAssembly's [textual format](https://developer.mozilla.org/en-US/docs/WebAssembly/Understanding_the_text_format), the generated file can then be compiled to the binary format using the wat2wasm tool from the [WebAssembly binary toolkit](https://github.com/WebAssembly/wabt#wabt-the-webassembly-binary-toolkit).
 
 ## Executing a program
 
@@ -58,4 +58,4 @@ Features which are not currently implemented include:
 
 A small subset of the C standard library is included (putchar, puts, malloc, free and some functions from string.h), the source files related to the standard library can be found in the [`include`](./include/) directory.
 
-A basic preprocessor is also included, the available directives are `#define` (for simple macros only), `#include`, `#ifdef`, `#ifndef` and `#endif`.
+A basic preprocessor is also included, the available directives are `#define` (for simple macros only), `#undef`, `#include`, `#ifdef`, `#ifndef` and `#endif`.
