@@ -190,6 +190,10 @@ let unify t1 t2 =
   in
   Const t
 
+(** Indique qi une fonction possède un certain attribut *)
+let has_attribute f attribute =
+  List.mem attribute f.attributes
+
 (** Vérification du bon typage d'un programme.
     Renvoie l'ast typé *)
 let typecheck_program (prog: prog) =
@@ -250,7 +254,10 @@ let typecheck_program (prog: prog) =
             let e2' = get_cast e2 t in
             e1', e2', t
           | Lsl | Asr when is_integral e1.t && is_integral e2.t ->
-            e1, e2, e1.t
+            let t = unify e1.t e2.t in
+            let e1' = get_cast e1 t in
+            let e2' = get_cast e2 t in
+            e1', e2', t
           | Lt | Leq | Gt | Geq | Eq | Neq ->
             let t = unify e1.t e2.t in
             let e1' = get_cast e1 t in
@@ -479,20 +486,17 @@ let typecheck_program (prog: prog) =
         try
           let env' = { env with functions = Env.remove f.name env.functions } in
           let env'', f' = typecheck_function env' f in
+          Hashtbl.replace functions f.name f';
           (env'', vars), Function f'
         with
           e -> error (Local f.name) e
       in
       match Hashtbl.find_opt functions f.name with
       | None -> add_func f
-      | Some f when f.is_forward_decl -> add_func f
+      | Some f' when f'.is_forward_decl -> add_func f
       | Some _ -> error Global (Failure (Printf.sprintf "redefinition of function %s" f.name))
       end
   ) ({ functions=Env.empty; variables=Env.empty }, Env.empty) prog
-  in
-  
-  let has_attribute f attribute =
-    List.mem attribute f.attributes
   in
 
   (* Vérification des prédéclarations (TODO) *)
@@ -507,4 +511,8 @@ let typecheck_program (prog: prog) =
         failwith (Printf.sprintf "Cannot define a function which is declared extern (%s)" f.name)
   ) functions;
   
-  ast
+  List.filter (fun decl ->
+    match decl with
+    | Variable (_, _, _) -> true
+    | Function f -> not f.is_forward_decl || has_attribute f "extern"
+  ) ast

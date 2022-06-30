@@ -14,8 +14,7 @@
 (package
  (name libminic)
  (version 1.0.0)
- (synopsis
-  "Biblioth\195\168que de fonctions utiles pour manipuler des programmes Mini-C")
+ (synopsis "Collection of functions used by the Mini-C compiler")
  (description "")
  (depends
   (menhir
@@ -24,9 +23,10 @@
 (package
  (name minic)
  (version 1.0.0)
- (synopsis
-  "Programme pour v\195\169rifier et interpr\195\168ter du code Mini-C")
+ (synopsis "A C to WebAssembly compiler")
  (description "")
  (depends
   (libminic
+   (>= 1.0))
+  (cmdliner
    (>= 1.0))))

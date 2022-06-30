@@ -27,7 +27,7 @@ let extended_dtype_of_typ = function
   | Minic.Tab _ -> failwith "unreachable"
 
 (* Traduction d'une définition de fonction *)
-let tr_fdef func =
+let tr_fdef (func: Minic.fun_def) =
   (* Associe une portée (globale, locale, ou paramètre) à une variable *)
   let convert_var v =
     let get_i_opt x l =
@@ -107,7 +107,7 @@ let tr_fdef func =
     | e::tl -> tr_expr e (tr_args tl next)
   in
   (* Traduit une instruction *)
-  let rec tr_instr i next =
+  let rec tr_instr (i: Minic.instr) next =
     match i with
     | Minic.Set (v, e) -> tr_expr e (Llir.Set (convert_var v) :: next)
     | Minic.Write (t, p, e) -> tr_expr p (tr_expr e (Llir.Store (Option.get (extended_dtype_of_typ t)) :: next))

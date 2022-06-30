@@ -49,6 +49,7 @@ type instr =
 (** Type des blocs de code *)
 and block = instr list
 
+(** Définition de fonction contenant seulement les informations nécessaires *)
 type fun_def = {
   name: string;
   params: (string * typ) list;
@@ -64,6 +65,39 @@ type prog = {
   globals: (string * typ) list;
   functions: fun_def list;
   extern_functions: (string option * fun_def) list;
+}
+
+(** Représentation des instructions contenant plus  d'informations, elle est utilisée
+    dans les phases de transformation intermédiares *)
+type rich_instr =
+  | Set of typ * string * expr
+  | Memcpy of expr * expr * int (* dest, src, taille *)
+  | StaticMemcpy of expr * int * int (* dest, id du segment, taille du segment *)
+  | Write of typ * expr * expr
+  | If of expr * rich_block * rich_block
+  | While of expr * rich_block
+  | Return of (string * typ) list * expr
+  | Expr of expr
+  | Block of rich_block
+(** Blocs de code associés à la liste des variables qui y sont déclarées *)
+and rich_block = (string, typ) Hashtbl.t * rich_instr list
+
+type rich_fun_def = {
+  name: string;
+  params: (string * typ) list;
+  locals: (string * typ) list;
+  return: typ;
+  rich_body: rich_block;
+  attributes: string list;
+}
+
+type rich_prog = {
+  static: (int * string) list; (* Données mémoire *)
+  persistent: string list; (* Données persistentes, par ex : initialisateur des tableaux*)
+  static_pages: int;
+  globals: (string * typ) list;
+  rich_functions: rich_fun_def list;
+  extern_functions: (string option * rich_fun_def) list;
 }
 
 let todo ?msg location =
@@ -221,6 +255,85 @@ let calc_const_expr e =
   in
   calc_const_expr e
 
+(* Conversion from rich prog to regular prog *)
+
+let rec block_of_rich_block b =
+  List.map instr_of_rich_instr (snd b)
+and instr_of_rich_instr (i: rich_instr): instr =
+  match i with
+  | Set (_, v, e) -> Set (v, e)
+  | Memcpy (dest, src, size) -> Memcpy (dest, src, size)
+  | StaticMemcpy (dest, id, size) -> StaticMemcpy (dest, id, size)
+  | Write (t, ptr, e) -> Write (t, ptr, e)
+  | If (cond, t, f) -> If (cond, block_of_rich_block t, block_of_rich_block f)
+  | While (cond, b) -> While (cond, block_of_rich_block b)
+  | Return (_, e) -> Return e
+  | Expr e -> Expr e
+  | Block b -> Block (block_of_rich_block b)
+
+let fun_of_rich_fun fdef =
+  {
+    name = fdef.name;
+    params = fdef.params;
+    locals = fdef.locals;
+    return = fdef.return;
+    body = block_of_rich_block fdef.rich_body;
+  }
+
+let prog_of_rich_prog prog =
+  {
+    static = prog.static;
+    persistent = prog.persistent;
+    static_pages = prog.static_pages;
+    globals = prog.globals;
+    functions = List.map fun_of_rich_fun prog.rich_functions;
+    extern_functions = List.map (fun (nmsp, f) -> nmsp, fun_of_rich_fun f) prog.extern_functions;
+  }
+
+let add_reference_counting prog =
+  let tr_fun f =
+    let rec decr_vars vars next =
+      match vars with
+      | [] -> next
+      | (var, Ptr _) :: tl ->
+        Expr (Call ("__decrement_ref", [Get var])) :: decr_vars tl next
+      | _ :: tl ->
+        decr_vars tl next
+    in
+    let rec tr_block b =
+      let local_vars, block = b in
+      let decr_pointers v t acc =
+        match t with
+        | Ptr _ -> Expr (Call ("__decrement_ref", [Get v])) :: acc
+        | _ -> acc
+      in
+      let b = List.flatten (List.map tr_instr block) in
+      let tail = Hashtbl.fold decr_pointers local_vars [] in
+      local_vars, b @ tail
+    and tr_instr i =
+      match i with
+      | Set (Ptr _, var, _) ->
+        [Expr (Call ("__decrement_ref", [Get var])); i; Expr (Call ("__increment_ref", [Get var]))]
+      | Write (Ptr _ as t, ptr, _) ->
+        [Expr (Call ("__decrement_ref", [Read (t, ptr)])); i; Expr (Call ("__increment_ref", [Read (t, ptr)]))]
+      | If (cond, t, f) -> [If (cond, tr_block t, tr_block f)]
+      | While (cond, b) -> [While (cond, tr_block b)]
+      | Block b -> [Block (tr_block b)]
+      | Return (vars, e) -> decr_vars vars [Return (vars, e)]
+      | _ -> [i]
+    in
+    let body' = tr_block f.rich_body in
+    { f with rich_body = body' }
+  in
+  let functions' = List.map (fun f ->
+    if List.mem "gc_exclude" f.attributes
+      then f
+      else tr_fun f
+  ) prog.rich_functions
+  in
+  { prog with rich_functions = functions' } 
+
+
 (** Convertit la représentation sous forme d'ast en cette représentation
     intermédiaire *)
 let prog_of_ast ast =
@@ -293,8 +406,7 @@ let prog_of_ast ast =
       match v with
       | Integral i -> Tab (tr_typ t, Int64.to_int i)
       | _ -> failwith __LOC__ (* unreachable *)
-  (* Fonction de traduction d'une expression
-      - traduit les noms de variables dans le cas Get v *)
+  (* Fonction de traduction d'une expression *)
   and tr_expr e =
     match Ast.(e.expr) with
     | Ast.Cst c -> Cst (const_expr_of_constant c)
@@ -303,7 +415,7 @@ let prog_of_ast ast =
     | Ast.UnaryOperator (op, e) -> UnaryOperator (tr_typ e.t, op, tr_expr e)
     | Ast.BinaryOperator (Add | Sub as op, e1, e2) ->
       begin match tr_typ e1.t with
-      | Ptr t ->
+      | Ptr t when t <> Void ->
         let offset = BinaryOperator (Integer Int, Mult, make_size (sizeof t), tr_expr e2) in
         BinaryOperator (Ptr t, op, tr_expr e1, offset)
       | _ as t -> BinaryOperator (t, op, tr_expr e1, tr_expr e2)
@@ -333,24 +445,34 @@ let prog_of_ast ast =
     let add_var v t =
       let name = make_id () in
       let block_locals = Stack.top locals_stack in
-      block_locals := name :: !block_locals;
+      block_locals := (v, name, t) :: !block_locals;
       local_variables := (name, t) :: !local_variables;
       Hashtbl.add env v name
+    in
+    let get_declared_vars s =
+      Stack.fold (fun acc l ->
+        acc @ List.map (fun (_, name, t) -> name, t) !l
+      ) [] s
     in
     let enter_block () =
       Stack.push (ref []) locals_stack
     in
     let exit_block () =
       let block_locals = !(Stack.pop locals_stack) in
-      List.iter (Hashtbl.remove env) block_locals;
+      let local_env = Hashtbl.create (List.length block_locals) in
+      List.iter (fun (var_name, var_id, t) ->
+        Hashtbl.remove env var_name;
+        Hashtbl.add local_env var_id t
+      ) block_locals;
+      local_env
     in
     
     (* Fonction de traduction d'un bloc d'instructions *)
     let rec tr_block b =
       let stack_size = ref 0 in
       let sp = "__sp" in
-      let incr_sp size = Set (sp, BinaryOperator (Integer Int, Add, Get sp, make_size size)) in
-      let decr_sp size = Set (sp, BinaryOperator (Integer Int, Sub, Get sp, make_size size)) in
+      let incr_sp size = Set (Integer Int, sp, BinaryOperator (Integer Int, Add, Get sp, make_size size)) in
+      let decr_sp size = Set (Integer Int, sp, BinaryOperator (Integer Int, Sub, Get sp, make_size size)) in
       (* Traduit une suite de déclaration de variables *)
       let rec tr_decl = function
         | [] -> []
@@ -370,44 +492,46 @@ let prog_of_ast ast =
               else
                 List.mapi (fun i e -> Write (t, make_ptr t (Get (get_var v)) (make_size i), e)) l
             in
-            Set (get_var v, Get sp) :: incr_sp size :: instr @ tr_decl tl
+            Set (Integer Int, get_var v, Get sp) :: incr_sp size :: instr @ tr_decl tl
           | Tab (Integer Char as t, n), str ->
             stack_size := !stack_size + n;
             add_var v (Ptr t);
             let memcpy = Memcpy (Get (get_var v), str, n) in
-            Set (get_var v, Get sp) :: incr_sp n :: memcpy :: tr_decl tl
+            Set (Integer Int, get_var v, Get sp) :: incr_sp n :: memcpy :: tr_decl tl
           | t, e' ->
             add_var v t;
-            Set (get_var v, e') :: tr_decl tl
+            Set (t, get_var v, e') :: tr_decl tl
           end
       in
       (* Fonction de traduction d'une instruction *)
       let tr_instr = function (* TODO : trouver autre chose que le flatten *)
         | Ast.Decl vars -> tr_decl vars
-        | Ast.Set (v, e) -> [Set (get_var v, tr_expr e)]
+        | Ast.Set (v, e) -> [Set (tr_typ Ast.(e.t), get_var v, tr_expr e)]
         | Ast.Write (ptr, offset, e) ->
           let t = get_ptr_type (tr_typ Ast.(ptr.t)) in
           [Write (t, make_ptr t (tr_expr ptr) (tr_expr offset), tr_expr e)]
         | Ast.If (c, b1, b2) -> [If (tr_expr c, tr_block b1, tr_block b2)]
         | Ast.While (c, b) -> [While (tr_expr c, tr_block b)]
-        | Ast.Return e -> [Set (sp, Get "__init_sp"); Return (tr_expr e)]
+        | Ast.Return e -> [Set (Integer Int, sp, Get "__init_sp"); Return (get_declared_vars locals_stack, tr_expr e)]
         | Ast.Expr e -> [Expr (tr_expr e)]
         | Ast.Block b -> [Block (tr_block b)]
       in
       enter_block ();
       let b' = List.flatten (List.map tr_instr b) in
-      exit_block ();
-      b' @ [decr_sp !stack_size]
+      let local_env = exit_block () in
+      local_env, b' @ [decr_sp !stack_size]
     in
 
     List.iter (fun (v, _) -> Hashtbl.add env v v) Ast.(f.params);
-    let body = Set ("__init_sp", Get "__sp") :: tr_block Ast.(f.body) in
+    let env, body = tr_block Ast.(f.body) in
+    let body = env, Set (Integer Int, "__init_sp", Get "__sp") :: body in
     {
       name = Ast.(f.name);
       params = List.map (fun (v, t) -> v, tr_typ t) Ast.(f.params);
       locals = ("__init_sp", Integer Int) :: !local_variables;
       return = tr_typ Ast.(f.return);
-      body = body;
+      rich_body = body;
+      attributes = Ast.(f.attributes);
     }
   in
 
@@ -427,6 +551,7 @@ let prog_of_ast ast =
   let static, globals, funcs, extern_funcs, init_instr =
     List.fold_left (fun (static, globals, funcs, extern_funcs, init_instr) global ->
       match global with
+      (* Cas des variables globales *)
       | Ast.Variable (v, t, e) ->
         Hashtbl.add env v v;
         let e' = tr_expr e in
@@ -437,15 +562,18 @@ let prog_of_ast ast =
           let offset = !static_offset in
           let buffer = buffer_of_initlist l' in
           static_offset := offset + n * (sizeof t);
-          (offset, escape_string (Buffer.contents buffer)) :: static, (v, Ptr t) :: globals, funcs, extern_funcs, Set (v, make_size offset)::init_instr
-        | _, _ -> static, (v, t') :: globals, funcs, extern_funcs, Set (v, e') :: init_instr
+          (offset, escape_string (Buffer.contents buffer)) :: static, (v, Ptr t) :: globals, funcs, extern_funcs, Set (Integer Int, v, make_size offset)::init_instr
+        | _, _ -> static, (v, t') :: globals, funcs, extern_funcs, Set (t', v, e') :: init_instr
         end
+      (* Cas des fonctions déclarées "extern" *)
       | Ast.Function f when f.is_forward_decl && List.mem "extern" f.attributes ->
-        let f' = { (tr_fun f) with locals = []; body = [] } in
+        let f' = { (tr_fun f) with locals = []; rich_body = (Hashtbl.create 0, []) } in
         let namespace = get_namespace f.attributes in
         static, globals, funcs, (namespace, f') :: extern_funcs, init_instr
+      (* cas des fonctions définies *)
       | Ast.Function f when not f.is_forward_decl ->
         static, globals, tr_fun f :: funcs, extern_funcs, init_instr
+      (* Cas des prédeclarations non extern, éliminées à l'étape précedente *)
       | Ast.Function _ -> failwith __LOC__ (* unreachable *)
     ) (static_strings, [], [], [], []) ast
   in
@@ -456,24 +584,42 @@ let prog_of_ast ast =
     params = [];
     locals = [];
     return = Void;
-    body = init_instr;
+    body = block_of_rich_block (Hashtbl.create 0, init_instr);
   }
   in
   (* on calcule le nombre de pages utilisées par la section de données statiques *)
-  let open Minic_wasm in
+  let page_size = Minic_wasm.page_size in
+  let stack_size = Minic_wasm.stack_size in
   let static_pages = (!static_offset / page_size) + (if !static_offset mod page_size <> 0 then 1 else 0) in
   (* on ajoute les instructions nécessaire à l'initialisation de la bibliothèque malloc si stdlib.h est inclus *)
   let init_fun =
-    if Hashtbl.mem Preprocessor.defines "__STDLIB_H" then
-      { init_fun with body = List.rev (Expr (Call ("__malloc_h_init", [])) :: init_fun.body) }
+    if Preprocessor.defined "__STDLIB_H" then
+      let heap_start = Cst {
+        t=Integer Int;
+        value = Integral (Int64.of_int (page_size * (static_pages + stack_size)))
+      }
+      in
+      let malloc_init: instr = Expr (Call ("__malloc_h_init", [heap_start])) in
+      { init_fun with body = List.rev (malloc_init :: init_fun.body) }
     else
       init_fun
   in
-  {
-    static;
-    persistent = List.rev (!persistent_data);
-    static_pages;
-    globals;
-    extern_functions = extern_funcs;
-    functions = init_fun :: funcs
-  }
+  let maybe_transform cond f arg =
+    if cond
+    then f arg
+    else arg
+  in
+  (* On applique d'éventuelles transformations à notre programme *)
+  let prog = 
+    {
+      static;
+      persistent = List.rev (!persistent_data);
+      static_pages;
+      globals;
+      extern_functions = extern_funcs;
+      rich_functions = funcs
+    }
+    |> maybe_transform (Preprocessor.defined "__MINIC_GC") add_reference_counting
+    |> prog_of_rich_prog
+  in
+  { prog with functions = init_fun :: prog.functions }

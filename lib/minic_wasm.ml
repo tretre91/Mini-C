@@ -220,6 +220,8 @@ let __heap_end =
 
 let __malloc_h_init =
   let body = [
+    local_get 0;
+    global_set "__heap_start";
     global_get "__heap_start";
     call "__heap_end";
     cast Llir.Int32 Llir.Int64;
@@ -227,13 +229,13 @@ let __malloc_h_init =
     cast Llir.Int32 Llir.Int64;
     sub I64;
     call "__make_block";
-    local_tee 0;
-    call "__set_free";
-    local_get 0;
+    local_tee 1;
+    call "__set_block_free";
+    local_get 1;
     call "__add_free_block";
   ]
   in
-  func "__malloc_h_init" [] [I32] None body
+  func "__malloc_h_init" [I32] [I32] None body
 
 (** Traduction d'un programme *)
 let tr_prog prog =
@@ -318,7 +320,6 @@ let tr_prog prog =
   let memory_size = data_size + stack_size + initial_heap_size in
   (* calcul des valeurs initiales des variables spéciales *)
   let make_i32_const i = const (Llir.I32Cst (Int32.of_int i)) in
-  let heap_start = make_i32_const (page_size * (data_size + stack_size)) in
   let sp_initial_value = make_i32_const (page_size * data_size) in
   let functions = add_functions (List.map tr_fdef Llir.(prog.functions)) in
   Module (
@@ -326,8 +327,7 @@ let tr_prog prog =
     :: extern_functions
     @ [Memory (memory_size);
        Global ("__sp", Mut, I32, [sp_initial_value]);
-       Global ("__heap_size", Mut, I32, [make_i32_const initial_heap_size]);
-       Global ("__heap_start", Export Const, I32, [heap_start]);]
+       Global ("__heap_size", Mut, I32, [make_i32_const initial_heap_size]);]
     @  data
     @  globals
     @  functions

@@ -1,12 +1,13 @@
 import * as stdio from "./stdio.mts"
-import * as mem from "./memory.mts"
+// import * as mem from "./memory.mts"
+import * as mem from "./gc_memory.mts"
 
 let memory: mem.Memory;
 
 function init_memory(instance: WebAssembly.Instance): void {
     const wasm_memory = instance.exports.mem as WebAssembly.Memory;
-    const heap_start = instance.exports.__heap_start as WebAssembly.Global;
-    memory = new mem.Memory(wasm_memory, heap_start.value);
+    const heap_start = instance.exports.__get_heap_start as Function;
+    memory = new mem.Memory(wasm_memory, heap_start());
 }
 let c = 0;
 function report(): void {
@@ -16,7 +17,7 @@ function report(): void {
     console.log(`number of blocks : ${blocks.length}`);
     console.log(`free blocks      : ${free_blocks}`);
     console.log(`allocated blocks : ${allocated_blocks}`);
-    
+
     const total_memory = blocks.reduce((total, b) => total + b.size + 8, 0);
     console.log(`heap size : ${memory.get_heap_size()}`);
     console.log(`used heap : ${total_memory}`);
@@ -32,8 +33,11 @@ const importObj: WebAssembly.Imports = {
     },
     debug: {
         __dump: () => memory.dump(),
-        __log: (i: number) => { Deno.stdout.writeSync(encoder.encode(`${i}\n`)); },
-        __export: () => memory.export()
+        // __log: (i: number) => { Deno.stdout.writeSync(encoder.encode(`${i}\n`)); },
+        __log: console.log,
+        __export: () => memory.export(),
+        log_incr: (ptr: number) => console.log(`Incremented ref count of ${ptr}`),
+        log_decr: (ptr: number) => console.log(`Decremented ref count of ${ptr}`),
     }
 };
 
@@ -48,11 +52,18 @@ if (Deno.args.length == 0) {
         const main = instance.exports.main as Function;
         try {
             main();
+            console.log("after main");
+            // report();
+            // memory.export();
+            // const run_gc = instance.exports.__run_gc as Function;
+            // run_gc();
         } catch (error) {
             Deno.stdout.writeSync(encoder.encode(`An exception occured: ${error}\n`));
             memory.dump();
             memory.export();
         }
+        // console.log("after gc");
         report();
+        memory.export();
     });
 }
