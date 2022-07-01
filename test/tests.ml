@@ -16,7 +16,7 @@ let gcc_compile_exec filename =
   let executable = Filename.concat (Filename.get_temp_dir_name ()) "test" in
 
   let cat_src_cmd = Filename.quote_command "cat" [filename] in
-  let compile_cmd = Filename.quote_command "gcc" [source_file; "-o"; executable] in
+  let compile_cmd = Filename.quote_command "gcc" [source_file; "-o"; executable; "-I"; Sys.getcwd ()] in
   
   execute_command (sprintf "%s >> %s" cat_src_cmd source_file);
   execute_command compile_cmd;
@@ -37,7 +37,7 @@ let minic_compile_exec filename =
   let args = {
     input_file = filename;
     output_file = Some wat_file;
-    include_paths = [];
+    include_paths = [Sys.getcwd ()];
     definitions = [];
     dump_preproc = None;
   }

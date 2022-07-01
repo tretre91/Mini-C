@@ -292,11 +292,13 @@ let prog_of_rich_prog prog =
 
 let add_reference_counting prog =
   let tr_fun f =
+    let incr_ptr p = Expr (Call ("__increment_ref", [p])) in
+    let decr_ptr p = Expr (Call ("__decrement_ref", [p])) in
     let rec decr_vars vars next =
       match vars with
       | [] -> next
       | (var, Ptr _) :: tl ->
-        Expr (Call ("__decrement_ref", [Get var])) :: decr_vars tl next
+        decr_ptr (Get var) :: decr_vars tl next
       | _ :: tl ->
         decr_vars tl next
     in
@@ -304,7 +306,7 @@ let add_reference_counting prog =
       let local_vars, block = b in
       let decr_pointers v t acc =
         match t with
-        | Ptr _ -> Expr (Call ("__decrement_ref", [Get v])) :: acc
+        | Ptr _ -> decr_ptr (Get v) :: acc
         | _ -> acc
       in
       let b = List.flatten (List.map tr_instr block) in
@@ -313,13 +315,17 @@ let add_reference_counting prog =
     and tr_instr i =
       match i with
       | Set (Ptr _, var, _) ->
-        [Expr (Call ("__decrement_ref", [Get var])); i; Expr (Call ("__increment_ref", [Get var]))]
+        [decr_ptr (Get var); i; incr_ptr (Get var)]
       | Write (Ptr _ as t, ptr, _) ->
-        [Expr (Call ("__decrement_ref", [Read (t, ptr)])); i; Expr (Call ("__increment_ref", [Read (t, ptr)]))]
+        [decr_ptr (Read (t, ptr)); i; incr_ptr (Read (t, ptr))]
       | If (cond, t, f) -> [If (cond, tr_block t, tr_block f)]
       | While (cond, b) -> [While (cond, tr_block b)]
       | Block b -> [Block (tr_block b)]
-      | Return (vars, e) -> decr_vars vars [Return (vars, e)]
+      | Return (vars, e) ->
+        begin match f.return with
+        | Ptr _ -> incr_ptr e :: decr_vars vars [Return (vars, e)] (* TODO : gerer le cas de return t[1] *)
+        | _ -> decr_vars vars [Return (vars, e)]
+        end
       | _ -> [i]
     in
     let body' = tr_block f.rich_body in
