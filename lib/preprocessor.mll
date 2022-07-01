@@ -50,7 +50,16 @@
 
   let user_include_paths = ref []
 
+  (** Table de hachage contenant les macros définies *)
+  let defines = Hashtbl.create 16
+
+  (** Indique si une macro est définie *)
+  let defined = Hashtbl.mem defines
+
   let init args =
+    List.iter (fun (macro, value) ->
+      Hashtbl.add defines macro (Option.value value ~default:"")
+    ) args.definitions;
     user_include_paths := Sys.getcwd () :: args.include_paths
 
   let if_depth = ref 0
@@ -87,12 +96,6 @@
     Printf.fprintf stderr "error at (%d, %d): %s\n" pos.pos_lnum (pos.pos_cnum - pos.pos_bol) message;
     exit 1
 
-  (** Table de hachage contenant les macros définies *)
-  let defines = Hashtbl.create 16
-
-  (** Indique si une macro est définie *)
-  let defined = Hashtbl.mem defines
-
   (** convertit la condition d'une directive #ifdef en bool *)
   let get_condition str =
     match int_of_string_opt str with
@@ -113,6 +116,12 @@ let condition = id | integer
 let line_comment = "//"[^'\n']*
 
 rule preprocess oc = parse
+  | '\"' {
+      let b = Buffer.create 64 in
+      get_string b lexbuf;
+      Printf.fprintf oc "\"%s\"" (Buffer.contents b);
+      preprocess oc lexbuf 
+    }
   | word as w {
       let s = match Hashtbl.find_opt defines w with
       | None -> w
@@ -161,6 +170,14 @@ rule preprocess oc = parse
         ignore_if 1 lexbuf
       else
         incr if_depth;
+      preprocess oc lexbuf
+    }
+  | space* "#else" space* '\n' {
+      if !if_depth > 0 then
+        let () = decr if_depth in
+        ignore_if 1 lexbuf
+      else
+        error "#else without an #if directive" (Lexing.lexeme_start_p lexbuf);
       preprocess oc lexbuf
     }
   | space* "#endif" space* '\n' {
@@ -273,6 +290,12 @@ and ignore_if depth = parse
   | space* "#endif" space* '\n' {
       if depth > 1 then
         ignore_if (depth - 1) lexbuf
+    }
+  | space* "#else" space* '\n' {
+      if depth = 1 then
+        incr if_depth
+      else
+        ignore_if depth lexbuf
     }
   | eof {
       error "Unclosed ifdef block" (Lexing.dummy_pos) (* TODO *)

@@ -37,7 +37,8 @@ let minic_compile_exec filename =
   let args = {
     input_file = filename;
     output_file = Some wat_file;
-    include_paths = []; 
+    include_paths = [];
+    definitions = [];
     dump_preproc = None;
   }
   in

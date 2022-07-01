@@ -58,4 +58,4 @@ Features which are not currently implemented include:
 
 A small subset of the C standard library is included (putchar, puts, malloc, free and some functions from string.h), the source files related to the standard library can be found in the [`include`](./include/) directory.
 
-A basic preprocessor is also included, the available directives are `#define` (for simple macros only), `#undef`, `#include`, `#ifdef`, `#ifndef` and `#endif`.
+A basic preprocessor is also included, the available directives are `#define` (for simple macros only), `#undef`, `#include`, `#ifdef`, `#ifndef`, `#else` and `#endif`.
