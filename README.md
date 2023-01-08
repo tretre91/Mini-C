@@ -55,6 +55,8 @@ Features which are not currently implemented include:
 - assignments operators (`a += 2`, `b *= 3`, etc)
 - assignments as expressions (`int a; if (a = 5) {...`)
 - single line blocks (`if (true) ...;`, `while(false) ...;`)
+- structures
+- typedefs
 
 A small subset of the C standard library is included (putchar, puts, malloc, free and some functions from string.h), the source files related to the standard library can be found in the [`include`](./include/) directory.
 
